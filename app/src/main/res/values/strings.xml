@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Arbeitszeit</string>
+    <string name="widget_description">Zeigt die aktuelle Netto-Arbeitszeit an</string>
+    <string name="tab_timer">Timer</string>
+    <string name="tab_calculator">Rechner</string>
+</resources>

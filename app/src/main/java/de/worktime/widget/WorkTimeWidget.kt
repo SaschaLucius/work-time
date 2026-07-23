@@ -1,0 +1,197 @@
+package de.worktime.widget
+
+import android.app.AlarmManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.glance.GlanceId
+import androidx.glance.GlanceModifier
+import androidx.glance.GlanceTheme
+import androidx.glance.action.ActionParameters
+import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.action.ActionCallback
+import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.action.actionStartActivity
+import androidx.glance.appwidget.provideContent
+import androidx.glance.appwidget.updateAll
+import androidx.glance.LocalContext
+import androidx.glance.action.clickable
+import androidx.glance.background
+import androidx.glance.layout.Alignment
+import androidx.glance.layout.Column
+import androidx.glance.layout.Row
+import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.padding
+import androidx.glance.text.FontWeight
+import androidx.glance.text.Text
+import androidx.glance.text.TextStyle
+import de.worktime.MidnightResetReceiver
+import de.worktime.data.WorkSessionStore
+import de.worktime.domain.WorkTimeCalculator
+import de.worktime.ui.MainActivity
+import java.time.LocalDate
+import java.time.ZoneId
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+
+private const val ACTION_TICK = "de.worktime.WIDGET_TICK"
+
+private fun widgetTickPendingIntent(context: Context): PendingIntent {
+    val intent = Intent(context, WorkTimeWidgetReceiver::class.java)
+        .setAction(ACTION_TICK)
+    return PendingIntent.getBroadcast(
+        context, 1, intent,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+}
+
+fun scheduleWidgetTick(context: Context) {
+    val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    alarmManager.setInexactRepeating(
+        AlarmManager.RTC,
+        System.currentTimeMillis() + 60_000L,
+        60_000L,
+        widgetTickPendingIntent(context)
+    )
+}
+
+fun cancelWidgetTick(context: Context) {
+    val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    alarmManager.cancel(widgetTickPendingIntent(context))
+}
+
+class WorkTimeWidget : GlanceAppWidget() {
+
+    override suspend fun provideGlance(context: Context, id: GlanceId) {
+        val store = WorkSessionStore(context)
+        provideContent {
+            val session by store.session.collectAsState(
+                initial = WorkSessionStore.WorkSession()
+            )
+            GlanceTheme {
+                WidgetContent(session = session)
+            }
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun WidgetContent(session: WorkSessionStore.WorkSession) {
+    val isRunning = session.isRunning && session.startTimeMillis > 0
+    val grossMinutes = if (isRunning) {
+        ((System.currentTimeMillis() - session.startTimeMillis).coerceAtLeast(0) / 60_000).toInt()
+    } else 0
+    val netMinutes = WorkTimeCalculator.calculateNetMinutes(grossMinutes)
+    val breakMinutes = WorkTimeCalculator.requiredBreakMinutes(grossMinutes)
+
+    val baseModifier = GlanceModifier
+        .fillMaxSize()
+        .background(GlanceTheme.colors.surface)
+        .padding(horizontal = 14.dp, vertical = 8.dp)
+
+    // Beim Tippen auf das laufende Widget → App öffnen
+    val context = LocalContext.current
+    val rowModifier = if (isRunning)
+        baseModifier.clickable(actionStartActivity(
+            Intent(context, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        ))
+    else
+        baseModifier
+
+    if (!isRunning) {
+        // Nicht gestartet: nur Start-Button zentriert
+        Row(
+            modifier = baseModifier,
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            androidx.glance.Button(
+                text = "Start",
+                onClick = actionRunCallback<StartSessionAction>()
+            )
+        }
+    } else {
+        // Läuft: nur Zeitanzeige, zentriert
+        Column(
+            modifier = rowModifier,
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = WorkTimeCalculator.formatDuration(netMinutes),
+                style = TextStyle(
+                    color = GlanceTheme.colors.onSurface,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            )
+            if (breakMinutes > 0) {
+                Text(
+                    text = "−$breakMinutes Min. Pause",
+                    style = TextStyle(
+                        color = GlanceTheme.colors.onSurfaceVariant,
+                        fontSize = 9.sp
+                    )
+                )
+            }
+        }
+    }
+}
+
+/** Wird ausgeführt, wenn der Widget-Start-Button gedrückt wird. */
+class StartSessionAction : ActionCallback {
+    override suspend fun onAction(
+        context: Context,
+        glanceId: GlanceId,
+        parameters: ActionParameters
+    ) {
+        WorkSessionStore(context).startSession(System.currentTimeMillis())
+        scheduleMidnightAlarm(context)
+        scheduleWidgetTick(context)
+        WorkTimeWidget().updateAll(context)
+    }
+
+    private fun scheduleMidnightAlarm(context: Context) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, MidnightResetReceiver::class.java)
+            .setAction("de.worktime.MIDNIGHT_RESET")
+        val pi = PendingIntent.getBroadcast(
+            context, 0, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val midnight = LocalDate.now().plusDays(1)
+            .atStartOfDay(ZoneId.systemDefault())
+            .toInstant()
+            .toEpochMilli()
+        try {
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, midnight, pi)
+        } catch (_: SecurityException) {
+            alarmManager.set(AlarmManager.RTC_WAKEUP, midnight, pi)
+        }
+    }
+}
+
+class WorkTimeWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = WorkTimeWidget()
+
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        if (intent.action == ACTION_TICK) {
+            val result = goAsync()
+            CoroutineScope(Dispatchers.Main).launch {
+                try {
+                    WorkTimeWidget().updateAll(context)
+                } finally {
+                    result.finish()
+                }
+            }
+        }
+    }
+}
