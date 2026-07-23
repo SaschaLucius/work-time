@@ -66,7 +66,7 @@ jobs:
             exit 1
           fi
           {
-            echo "storeFile=app/release.keystore"
+            echo "storeFile=release.keystore"
             echo "storePassword=$KEYSTORE_PASSWORD"
             echo "keyAlias=$KEY_ALIAS"
             echo "keyPassword=$KEY_PASSWORD"

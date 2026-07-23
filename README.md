@@ -35,7 +35,7 @@ An Android app for tracking daily work hours according to German labor law (Arbe
 For a signed release build, create `keystore.properties` in the project root:
 
 ```properties
-storeFile=app/release.keystore
+storeFile=release.keystore
 storePassword=<your-keystore-password>
 keyAlias=<your-key-alias>
 keyPassword=<your-key-password>
