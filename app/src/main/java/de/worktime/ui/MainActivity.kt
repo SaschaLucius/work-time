@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -25,6 +26,7 @@ import androidx.navigation.compose.rememberNavController
 import de.worktime.ui.calculator.RechnerScreen
 import de.worktime.ui.theme.ArbeitsTheme
 import de.worktime.ui.timer.TimerScreen
+import de.worktime.ui.woche.WochensaldoScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -47,7 +49,8 @@ private fun ArbeitsApp() {
 
     val tabs = listOf(
         NavTab("timer", "Timer") { Icon(Icons.Default.Timer, contentDescription = "Timer") },
-        NavTab("rechner", "Rechner") { Icon(Icons.Default.Calculate, contentDescription = "Rechner") }
+        NavTab("rechner", "Rechner") { Icon(Icons.Default.Calculate, contentDescription = "Rechner") },
+        NavTab("woche", "Woche") { Icon(Icons.Default.DateRange, contentDescription = "Woche") }
     )
 
     Scaffold(
@@ -83,6 +86,7 @@ private fun ArbeitsApp() {
         ) {
             composable("timer") { TimerScreen(viewModel) }
             composable("rechner") { RechnerScreen() }
+            composable("woche") { WochensaldoScreen() }
         }
     }
 }
