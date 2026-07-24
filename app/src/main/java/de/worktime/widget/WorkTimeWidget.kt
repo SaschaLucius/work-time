@@ -95,13 +95,7 @@ private fun WidgetContent(session: WorkSessionStore.WorkSession?) {
     val size = LocalSize.current
     val widgetWidth = size.width.value
     val widgetHeight = size.height.value
-    // Scale by width, but cap at a fraction of height so the text never
-    // overflows a short widget (e.g. 4×1) and loses its vertical centering.
-    // For tall widgets (4×2, 4×4) width is still the binding dimension and
-    // the font grows large to fill the space.
-    val timeFontSize = minOf(widgetWidth * 0.22f, widgetHeight * 0.65f)
-        .coerceIn(20f, 96f).sp
-    val breakFontSize = (widgetWidth * 0.07f).coerceIn(9f, 16f).sp
+
     // null = still loading from DataStore; treat the same as running-but-unknown
     // to avoid flashing the Start button before the real state arrives
     val isRunning = session?.isRunning == true && (session.startTimeMillis) > 0
@@ -110,6 +104,17 @@ private fun WidgetContent(session: WorkSessionStore.WorkSession?) {
     } else 0
     val netMinutes = WorkTimeCalculator.calculateNetMinutes(grossMinutes)
     val breakMinutes = WorkTimeCalculator.requiredBreakMinutes(grossMinutes)
+
+    // Scale by width, but cap at a fraction of height so the text never
+    // overflows a short widget (e.g. 4×1) and loses its vertical centering.
+    // For tall widgets (4×2, 4×4) width is still the binding dimension and
+    // the font grows large to fill the space.
+    // When break text is shown in a single-row widget, use a smaller height
+    // factor so both the time and break line remain visible.
+    val timeHeightFactor = if (breakMinutes > 0) 0.42f else 0.65f
+    val timeFontSize = minOf(widgetWidth * 0.22f, widgetHeight * timeHeightFactor)
+        .coerceIn(20f, 96f).sp
+    val breakFontSize = (widgetWidth * 0.07f).coerceIn(9f, 16f).sp
 
     val baseModifier = GlanceModifier
         .fillMaxSize()

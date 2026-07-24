@@ -88,8 +88,6 @@ keytool -genkeypair \
   -validity 10000
 ```
 
-TKpf7eIkpv
-
 You will be prompted to set the keystore password, key alias password, and your identity details. Remember the values you enter — you will need them for the secrets.
 
 **Encode the keystore as Base64** for `KEYSTORE_BASE64`:
