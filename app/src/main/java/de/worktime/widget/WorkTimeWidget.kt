@@ -192,7 +192,7 @@ private fun WidgetContent(session: WorkSessionStore.WorkSession?) {
             )
             if (breakMinutes > 0) {
                 Text(
-                    text = "−$breakMinutes Min. Pause",
+                    text = "$breakMinutes Min. Pause",
                     style = TextStyle(
                         color = GlanceTheme.colors.onSurfaceVariant,
                         fontSize = breakFontSize
