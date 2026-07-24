@@ -77,6 +77,18 @@ fun cancelWidgetTick(context: Context) {
     alarmManager.cancel(widgetTickPendingIntent(context))
 }
 
+/**
+ * Re-arms the minute tick if a session is running. AlarmManager drops all of an
+ * app's alarms on package update / force-stop, so this must be called from every
+ * entry point (widget update, app start, boot, package replaced) to self-heal.
+ */
+suspend fun ensureWidgetTick(context: Context) {
+    val session = WorkSessionStore(context).session.first()
+    if (session.isRunning && session.startTimeMillis > 0) {
+        scheduleWidgetTick(context, session.startTimeMillis)
+    }
+}
+
 class WorkTimeWidget : GlanceAppWidget() {
 
     override val sizeMode = SizeMode.Exact
@@ -230,22 +242,33 @@ class WorkTimeWidgetReceiver : GlanceAppWidgetReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        if (intent.action == ACTION_TICK) {
-            val result = goAsync()
-            CoroutineScope(Dispatchers.Main).launch {
-                try {
-                    val store = WorkSessionStore(context)
-                    val session = store.session.first()
-                    if (session.isRunning && session.startTimeMillis > 0) {
-                        store.tickSession()
-                        WorkTimeWidget().updateAll(context)
-                        // Re-arm the next one-shot alarm for the following minute.
-                        scheduleWidgetTick(context, session.startTimeMillis)
-                    } else {
-                        cancelWidgetTick(context)
+        when (intent.action) {
+            ACTION_TICK -> {
+                val result = goAsync()
+                CoroutineScope(Dispatchers.Main).launch {
+                    try {
+                        val store = WorkSessionStore(context)
+                        val session = store.session.first()
+                        if (session.isRunning && session.startTimeMillis > 0) {
+                            store.tickSession()
+                            WorkTimeWidget().updateAll(context)
+                            // Re-arm the next one-shot alarm for the following minute.
+                            scheduleWidgetTick(context, session.startTimeMillis)
+                        } else {
+                            cancelWidgetTick(context)
+                        }
+                    } finally {
+                        result.finish()
                     }
-                } finally {
-                    result.finish()
+                }
+            }
+            // Fires on widget placement, reinstall/app update and every
+            // updatePeriodMillis — perfect hook to self-heal a lost tick alarm.
+            // Note: no goAsync() here, super.onReceive() already consumed it
+            // for APPWIDGET_UPDATE (calling it twice returns null → NPE).
+            "android.appwidget.action.APPWIDGET_UPDATE" -> {
+                CoroutineScope(Dispatchers.IO).launch {
+                    ensureWidgetTick(context)
                 }
             }
         }

@@ -51,6 +51,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (session.isRunning && session.startTimeMillis > 0 && !_state.value.isRunning) {
                     _state.update { it.copy(isRunning = true, startTimeMillis = session.startTimeMillis) }
                     startTicker(session.startTimeMillis)
+                    // Alarme können durch App-Update/Force-Stop verloren gehen → neu planen
+                    scheduleWidgetTick(getApplication(), session.startTimeMillis)
+                    scheduleMidnightReset()
                 }
                 // Gestoppte Session beim App-Start wiederherstellen
                 if (!session.isRunning && session.startTimeMillis > 0 && _state.value.startTimeMillis <= 0) {

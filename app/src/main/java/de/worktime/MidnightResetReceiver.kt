@@ -8,6 +8,7 @@ import android.content.Intent
 import androidx.glance.appwidget.updateAll
 import de.worktime.data.WorkSessionStore
 import de.worktime.widget.WorkTimeWidget
+import de.worktime.widget.scheduleWidgetTick
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -23,7 +24,8 @@ class MidnightResetReceiver : BroadcastReceiver() {
             try {
                 when (intent.action) {
                     "de.worktime.MIDNIGHT_RESET" -> handleMidnightReset(context)
-                    Intent.ACTION_BOOT_COMPLETED -> handleBootCompleted(context)
+                    Intent.ACTION_BOOT_COMPLETED,
+                    Intent.ACTION_MY_PACKAGE_REPLACED -> handleBootCompleted(context)
                 }
             } finally {
                 pendingResult.finish()
@@ -44,9 +46,11 @@ class MidnightResetReceiver : BroadcastReceiver() {
             session.isRunning && session.sessionDate != LocalDate.now().toString() -> {
                 store.resetSession()
             }
-            // Heutige Session noch aktiv → Mitternachts-Alarm neu planen
+            // Heutige Session noch aktiv → Alarme neu planen (gehen bei
+            // Reboot und App-Update verloren)
             session.isRunning -> {
                 scheduleNextMidnightAlarm(context)
+                scheduleWidgetTick(context, session.startTimeMillis)
             }
         }
         WorkTimeWidget().updateAll(context)
