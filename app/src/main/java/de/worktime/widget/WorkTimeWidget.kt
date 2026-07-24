@@ -40,6 +40,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 private const val ACTION_TICK = "de.worktime.WIDGET_TICK"
@@ -57,15 +58,18 @@ fun scheduleWidgetTick(context: Context, startTimeMillis: Long) {
     val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     val now = System.currentTimeMillis()
     val elapsed = (now - startTimeMillis).coerceAtLeast(0)
-    // Align the first alarm to the next minute boundary relative to startTimeMillis,
-    // so the widget updates exactly when the minute counter changes.
+    // Align to the next full minute boundary relative to startTimeMillis, so the
+    // widget updates exactly when the displayed minute counter changes.
     val nextMinuteBoundary = startTimeMillis + ((elapsed / 60_000) + 1) * 60_000
-    alarmManager.setInexactRepeating(
-        AlarmManager.RTC,
-        nextMinuteBoundary,
-        60_000L,
-        widgetTickPendingIntent(context)
-    )
+    val pi = widgetTickPendingIntent(context)
+    // One-shot EXACT alarm re-armed on every tick. Inexact repeating alarms get
+    // batched/throttled by Doze and often never fire, which is why the widget
+    // appeared frozen. RTC_WAKEUP + exact makes the minute tick reliable.
+    try {
+        alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, nextMinuteBoundary, pi)
+    } catch (_: SecurityException) {
+        alarmManager.set(AlarmManager.RTC_WAKEUP, nextMinuteBoundary, pi)
+    }
 }
 
 fun cancelWidgetTick(context: Context) {
@@ -194,7 +198,7 @@ class StartSessionAction : ActionCallback {
         glanceId: GlanceId,
         parameters: ActionParameters
     ) {
-        val startTimeMillis = System.currentTimeMillis()
+        val startTimeMillis = (System.currentTimeMillis() / 60_000) * 60_000
         WorkSessionStore(context).startSession(startTimeMillis)
         scheduleMidnightAlarm(context)
         scheduleWidgetTick(context, startTimeMillis)
@@ -230,7 +234,16 @@ class WorkTimeWidgetReceiver : GlanceAppWidgetReceiver() {
             val result = goAsync()
             CoroutineScope(Dispatchers.Main).launch {
                 try {
-                    WorkTimeWidget().updateAll(context)
+                    val store = WorkSessionStore(context)
+                    val session = store.session.first()
+                    if (session.isRunning && session.startTimeMillis > 0) {
+                        store.tickSession()
+                        WorkTimeWidget().updateAll(context)
+                        // Re-arm the next one-shot alarm for the following minute.
+                        scheduleWidgetTick(context, session.startTimeMillis)
+                    } else {
+                        cancelWidgetTick(context)
+                    }
                 } finally {
                     result.finish()
                 }

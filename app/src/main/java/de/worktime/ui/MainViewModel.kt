@@ -62,7 +62,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun start() {
-        val now = System.currentTimeMillis()
+        val now = (System.currentTimeMillis() / 60_000) * 60_000
         viewModelScope.launch {
             store.startSession(now)
             _state.update { it.copy(isRunning = true, startTimeMillis = now) }

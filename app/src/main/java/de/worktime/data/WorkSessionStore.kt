@@ -20,19 +20,22 @@ class WorkSessionStore(private val context: Context) {
         val KEY_START_TIME = longPreferencesKey("start_time_millis")
         val KEY_IS_RUNNING = booleanPreferencesKey("is_running")
         val KEY_SESSION_DATE = stringPreferencesKey("session_date")
+        val KEY_TICK_COUNT = longPreferencesKey("tick_count")
     }
 
     data class WorkSession(
         val startTimeMillis: Long = -1L,
         val isRunning: Boolean = false,
-        val sessionDate: String = ""
+        val sessionDate: String = "",
+        val tickCount: Long = 0L
     )
 
     val session: Flow<WorkSession> = context.dataStore.data.map { prefs ->
         WorkSession(
             startTimeMillis = prefs[KEY_START_TIME] ?: -1L,
             isRunning = prefs[KEY_IS_RUNNING] ?: false,
-            sessionDate = prefs[KEY_SESSION_DATE] ?: ""
+            sessionDate = prefs[KEY_SESSION_DATE] ?: "",
+            tickCount = prefs[KEY_TICK_COUNT] ?: 0L
         )
     }
 
@@ -61,6 +64,14 @@ class WorkSessionStore(private val context: Context) {
             prefs[KEY_START_TIME] = -1L
             prefs[KEY_IS_RUNNING] = false
             prefs[KEY_SESSION_DATE] = ""
+            prefs[KEY_TICK_COUNT] = 0L
+        }
+    }
+
+    /** Increments the tick counter so Glance recomposes and picks up the new current time. */
+    suspend fun tickSession() {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_TICK_COUNT] = (prefs[KEY_TICK_COUNT] ?: 0L) + 1L
         }
     }
 }
