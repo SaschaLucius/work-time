@@ -68,7 +68,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _state.update { it.copy(isRunning = true, startTimeMillis = now) }
             startTicker(now)
             scheduleMidnightReset()
-            scheduleWidgetTick(getApplication())
+            scheduleWidgetTick(getApplication(), now)
             WorkTimeWidget().updateAll(getApplication())
         }
     }

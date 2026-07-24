@@ -53,11 +53,16 @@ private fun widgetTickPendingIntent(context: Context): PendingIntent {
     )
 }
 
-fun scheduleWidgetTick(context: Context) {
+fun scheduleWidgetTick(context: Context, startTimeMillis: Long) {
     val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+    val now = System.currentTimeMillis()
+    val elapsed = (now - startTimeMillis).coerceAtLeast(0)
+    // Align the first alarm to the next minute boundary relative to startTimeMillis,
+    // so the widget updates exactly when the minute counter changes.
+    val nextMinuteBoundary = startTimeMillis + ((elapsed / 60_000) + 1) * 60_000
     alarmManager.setInexactRepeating(
         AlarmManager.RTC,
-        System.currentTimeMillis() + 60_000L,
+        nextMinuteBoundary,
         60_000L,
         widgetTickPendingIntent(context)
     )
@@ -184,9 +189,10 @@ class StartSessionAction : ActionCallback {
         glanceId: GlanceId,
         parameters: ActionParameters
     ) {
-        WorkSessionStore(context).startSession(System.currentTimeMillis())
+        val startTimeMillis = System.currentTimeMillis()
+        WorkSessionStore(context).startSession(startTimeMillis)
         scheduleMidnightAlarm(context)
-        scheduleWidgetTick(context)
+        scheduleWidgetTick(context, startTimeMillis)
         WorkTimeWidget().updateAll(context)
     }
 
