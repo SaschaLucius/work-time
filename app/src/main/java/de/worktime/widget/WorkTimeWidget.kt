@@ -72,7 +72,7 @@ class WorkTimeWidget : GlanceAppWidget() {
         val store = WorkSessionStore(context)
         provideContent {
             val session by store.session.collectAsState(
-                initial = WorkSessionStore.WorkSession()
+                initial = null
             )
             GlanceTheme {
                 WidgetContent(session = session)
@@ -82,9 +82,11 @@ class WorkTimeWidget : GlanceAppWidget() {
 }
 
 @androidx.compose.runtime.Composable
-private fun WidgetContent(session: WorkSessionStore.WorkSession) {
-    val isRunning = session.isRunning && session.startTimeMillis > 0
-    val grossMinutes = if (isRunning) {
+private fun WidgetContent(session: WorkSessionStore.WorkSession?) {
+    // null = still loading from DataStore; treat the same as running-but-unknown
+    // to avoid flashing the Start button before the real state arrives
+    val isRunning = session?.isRunning == true && (session.startTimeMillis) > 0
+    val grossMinutes = if (isRunning && session != null) {
         ((System.currentTimeMillis() - session.startTimeMillis).coerceAtLeast(0) / 60_000).toInt()
     } else 0
     val netMinutes = WorkTimeCalculator.calculateNetMinutes(grossMinutes)
@@ -105,7 +107,23 @@ private fun WidgetContent(session: WorkSessionStore.WorkSession) {
     else
         baseModifier
 
-    if (!isRunning) {
+    if (session == null) {
+        // Still loading: show neutral placeholder so Start button never flashes
+        Row(
+            modifier = baseModifier,
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "--:--",
+                style = TextStyle(
+                    color = GlanceTheme.colors.onSurfaceVariant,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            )
+        }
+    } else if (!isRunning) {
         // Nicht gestartet: nur Start-Button zentriert
         Row(
             modifier = baseModifier,
