@@ -11,9 +11,11 @@ import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
+import androidx.glance.LocalSize
 import androidx.glance.action.ActionParameters
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
@@ -68,6 +70,8 @@ fun cancelWidgetTick(context: Context) {
 
 class WorkTimeWidget : GlanceAppWidget() {
 
+    override val sizeMode = SizeMode.Exact
+
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val store = WorkSessionStore(context)
         provideContent {
@@ -83,6 +87,16 @@ class WorkTimeWidget : GlanceAppWidget() {
 
 @androidx.compose.runtime.Composable
 private fun WidgetContent(session: WorkSessionStore.WorkSession?) {
+    val size = LocalSize.current
+    val widgetWidth = size.width.value
+    val widgetHeight = size.height.value
+    // Scale by width, but cap at a fraction of height so the text never
+    // overflows a short widget (e.g. 4×1) and loses its vertical centering.
+    // For tall widgets (4×2, 4×4) width is still the binding dimension and
+    // the font grows large to fill the space.
+    val timeFontSize = minOf(widgetWidth * 0.22f, widgetHeight * 0.65f)
+        .coerceIn(20f, 96f).sp
+    val breakFontSize = (widgetWidth * 0.07f).coerceIn(9f, 16f).sp
     // null = still loading from DataStore; treat the same as running-but-unknown
     // to avoid flashing the Start button before the real state arrives
     val isRunning = session?.isRunning == true && (session.startTimeMillis) > 0
@@ -118,7 +132,7 @@ private fun WidgetContent(session: WorkSessionStore.WorkSession?) {
                 text = "--:--",
                 style = TextStyle(
                     color = GlanceTheme.colors.onSurfaceVariant,
-                    fontSize = 22.sp,
+                    fontSize = timeFontSize,
                     fontWeight = FontWeight.Bold
                 )
             )
@@ -146,7 +160,7 @@ private fun WidgetContent(session: WorkSessionStore.WorkSession?) {
                 text = WorkTimeCalculator.formatDuration(netMinutes),
                 style = TextStyle(
                     color = GlanceTheme.colors.onSurface,
-                    fontSize = 22.sp,
+                    fontSize = timeFontSize,
                     fontWeight = FontWeight.Bold
                 )
             )
@@ -155,7 +169,7 @@ private fun WidgetContent(session: WorkSessionStore.WorkSession?) {
                     text = "−$breakMinutes Min. Pause",
                     style = TextStyle(
                         color = GlanceTheme.colors.onSurfaceVariant,
-                        fontSize = 9.sp
+                        fontSize = breakFontSize
                     )
                 )
             }
