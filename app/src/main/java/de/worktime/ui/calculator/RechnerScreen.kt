@@ -9,8 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -40,8 +40,9 @@ fun RechnerScreen() {
     var endHour by rememberSaveable { mutableIntStateOf(17) }
     var endMinute by rememberSaveable { mutableIntStateOf(0) }
 
-    // Ergebnis: Netto-Minuten, Pause-Minuten
-    var result by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    val gross = ((endHour * 60 + endMinute) - (startHour * 60 + startMinute)).coerceAtLeast(0)
+    val net = WorkTimeCalculator.calculateNetMinutes(gross)
+    val pause = WorkTimeCalculator.requiredBreakMinutes(gross)
 
     var showStartPicker by rememberSaveable { mutableStateOf(false) }
     var showEndPicker by rememberSaveable { mutableStateOf(false) }
@@ -83,25 +84,13 @@ fun RechnerScreen() {
             onClick = { showEndPicker = true }
         )
 
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(24.dp))
 
-        Button(
-            onClick = {
-                val gross = (endHour * 60 + endMinute) - (startHour * 60 + startMinute)
-                val grossClamped = gross.coerceAtLeast(0)
-                val net = WorkTimeCalculator.calculateNetMinutes(grossClamped)
-                val pause = WorkTimeCalculator.requiredBreakMinutes(grossClamped)
-                result = Pair(net, pause)
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Berechnen")
-        }
+        HorizontalDivider()
 
-        // Ergebnis
-        result?.let { (net, pause) ->
-            Spacer(Modifier.height(24.dp))
-            Surface(
+        Spacer(Modifier.height(24.dp))
+
+        Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.primaryContainer,
                 shape = MaterialTheme.shapes.large
@@ -152,7 +141,6 @@ fun RechnerScreen() {
                     )
                 }
             }
-        }
     }
 
     // Start-Zeitpicker
@@ -171,8 +159,7 @@ fun RechnerScreen() {
                     showStartPicker = false
                     startHour = pickerState.hour
                     startMinute = pickerState.minute
-                    result = null
-                }) { Text("OK") }
+                    }) { Text("OK") }
             },
             dismissButton = {
                 TextButton(onClick = { showStartPicker = false }) { Text("Abbrechen") }
@@ -196,8 +183,7 @@ fun RechnerScreen() {
                     showEndPicker = false
                     endHour = pickerState.hour
                     endMinute = pickerState.minute
-                    result = null
-                }) { Text("OK") }
+                    }) { Text("OK") }
             },
             dismissButton = {
                 TextButton(onClick = { showEndPicker = false }) { Text("Abbrechen") }
