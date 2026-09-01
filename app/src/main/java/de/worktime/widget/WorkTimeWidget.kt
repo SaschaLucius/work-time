@@ -33,6 +33,7 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import de.worktime.MidnightResetReceiver
+import de.worktime.scheduleTargetNotification
 import de.worktime.data.WorkSessionStore
 import de.worktime.domain.WorkTimeCalculator
 import de.worktime.ui.MainActivity
@@ -218,8 +219,10 @@ class StartSessionAction : ActionCallback {
     ) {
         val startTimeMillis = (System.currentTimeMillis() / 60_000) * 60_000
         WorkSessionStore(context).startSession(startTimeMillis)
+        val settings = WorkSessionStore(context).settings.first()
         scheduleMidnightAlarm(context)
         scheduleWidgetTick(context, startTimeMillis)
+        scheduleTargetNotification(context, startTimeMillis, settings)
         WorkTimeWidget().updateAll(context)
     }
 

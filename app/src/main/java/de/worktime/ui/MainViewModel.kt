@@ -9,6 +9,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.glance.appwidget.updateAll
 import de.worktime.MidnightResetReceiver
+import de.worktime.cancelTargetNotification
+import de.worktime.scheduleTargetNotification
 import de.worktime.data.WorkSessionStore
 import de.worktime.domain.WorkTimeCalculator
 import de.worktime.widget.WorkTimeWidget
@@ -52,6 +54,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Prüfen ob das gespeicherte Datum noch heute ist
                 if (session.isRunning && session.sessionDate != LocalDate.now().toString()) {
                     store.resetSession()
+                    cancelTargetNotification(getApplication())
                     return@collect
                 }
                 // Extern gestartete Session aufnehmen (z. B. vom Widget)
@@ -61,6 +64,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     // Alarme können durch App-Update/Force-Stop verloren gehen → neu planen
                     scheduleWidgetTick(getApplication(), session.startTimeMillis)
                     scheduleMidnightReset()
+                    scheduleTargetNotification(
+                        getApplication(),
+                        session.startTimeMillis,
+                        _state.value.settings
+                    )
                 }
                 // Gestoppte Session beim App-Start wiederherstellen
                 if (!session.isRunning && session.startTimeMillis > 0 && _state.value.startTimeMillis <= 0) {
@@ -74,6 +82,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _state.update { it.copy(settings = settings) }
                 val startTimeMillis = _state.value.startTimeMillis
                 if (startTimeMillis > 0) recalculate(startTimeMillis)
+                if (_state.value.isRunning) {
+                    scheduleTargetNotification(getApplication(), startTimeMillis, settings)
+                } else {
+                    cancelTargetNotification(getApplication())
+                }
                 WorkTimeWidget().updateAll(getApplication())
             }
         }
@@ -92,6 +105,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             startTicker(now)
             scheduleMidnightReset()
             scheduleWidgetTick(getApplication(), now)
+            scheduleTargetNotification(getApplication(), now, _state.value.settings)
             WorkTimeWidget().updateAll(getApplication())
         }
     }
@@ -102,6 +116,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             tickJob?.cancel()
             cancelMidnightReset()
             cancelWidgetTick(getApplication())
+            cancelTargetNotification(getApplication())
             _state.update { it.copy(isRunning = false) }
             WorkTimeWidget().updateAll(getApplication())
         }
@@ -113,6 +128,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             tickJob?.cancel()
             cancelMidnightReset()
             cancelWidgetTick(getApplication())
+            cancelTargetNotification(getApplication())
             _state.update {
                 TimerUiState(
                     settings = it.settings,
@@ -130,6 +146,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             recalculate(newStartMillis)
             if (_state.value.isRunning) {
                 startTicker(newStartMillis)
+                scheduleTargetNotification(
+                    getApplication(),
+                    newStartMillis,
+                    _state.value.settings
+                )
             }
         }
     }
@@ -144,6 +165,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             store.updateDailyTarget(minutes)
         }
+    }
+
+    fun updateNotificationsEnabled(enabled: Boolean) {
+        viewModelScope.launch { store.updateNotificationsEnabled(enabled) }
+    }
+
+    fun updateNotificationOffset(minutes: Int) {
+        viewModelScope.launch { store.updateNotificationOffset(minutes) }
     }
 
     fun updateWeekStart(day: DayOfWeek, minutes: Int) {
@@ -181,6 +210,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 tickJob?.cancel()
                 cancelMidnightReset()
                 cancelWidgetTick(getApplication())
+                cancelTargetNotification(getApplication())
                 _state.update {
                     TimerUiState(
                         settings = it.settings,

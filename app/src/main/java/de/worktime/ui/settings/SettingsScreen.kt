@@ -1,5 +1,10 @@
 package de.worktime.ui.settings
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,21 +20,39 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import de.worktime.data.WorkSessionStore
 import de.worktime.domain.WorkTimeCalculator
+import androidx.core.content.ContextCompat
 
 @Composable
 fun SettingsScreen(
     settings: WorkSessionStore.AppSettings,
     onBreakMinutesChange: (first: Int, second: Int) -> Unit,
-    onDailyTargetChange: (minutes: Int) -> Unit
+    onDailyTargetChange: (minutes: Int) -> Unit,
+    onNotificationsEnabledChange: (Boolean) -> Unit,
+    onNotificationOffsetChange: (Int) -> Unit
 ) {
+    val context = LocalContext.current
+    var permissionDenied by rememberSaveable { mutableStateOf(false) }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        permissionDenied = !granted
+        onNotificationsEnabledChange(granted)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -99,6 +122,65 @@ fun SettingsScreen(
                     )
                 }
             )
+        }
+
+        HorizontalDivider()
+
+        SettingsSection(title = "Benachrichtigung") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Beim Tagesziel erinnern",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f)
+                )
+                Switch(
+                    checked = settings.notificationsEnabled,
+                    onCheckedChange = { enabled ->
+                        when {
+                            !enabled -> onNotificationsEnabledChange(false)
+                            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ->
+                                onNotificationsEnabledChange(true)
+                            ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.POST_NOTIFICATIONS
+                            ) == PackageManager.PERMISSION_GRANTED ->
+                                onNotificationsEnabledChange(true)
+                            else -> {
+                                permissionDenied = false
+                                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                        }
+                    }
+                )
+            }
+            StepperRow(
+                label = "Früher erinnern",
+                value = "${settings.notificationOffsetMinutes} Min.",
+                canDecrease = settings.notificationOffsetMinutes > 0,
+                canIncrease = settings.notificationOffsetMinutes + 5 <=
+                    settings.dailyTargetMinutes,
+                onDecrease = {
+                    onNotificationOffsetChange(
+                        (settings.notificationOffsetMinutes - 5).coerceAtLeast(0)
+                    )
+                },
+                onIncrease = {
+                    onNotificationOffsetChange(
+                        (settings.notificationOffsetMinutes + 5)
+                            .coerceAtMost(settings.dailyTargetMinutes)
+                    )
+                }
+            )
+            if (permissionDenied) {
+                Text(
+                    text = "Die Benachrichtigungsberechtigung wurde nicht erteilt.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
         }
     }
 }

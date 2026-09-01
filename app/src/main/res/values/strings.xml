@@ -4,4 +4,7 @@
     <string name="widget_description">Zeigt die aktuelle Netto-Arbeitszeit an</string>
     <string name="tab_timer">Timer</string>
     <string name="tab_calculator">Rechner</string>
+    <string name="target_notification_channel">Arbeitszeit-Ziel</string>
+    <string name="target_notification_title">Tagesziel erreicht</string>
+    <string name="target_notification_text">Deine geplante Arbeitszeit ist erreicht.</string>
 </resources>

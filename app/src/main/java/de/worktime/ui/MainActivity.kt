@@ -107,7 +107,9 @@ private fun ArbeitsApp() {
                 SettingsScreen(
                     settings = state.settings,
                     onBreakMinutesChange = viewModel::updateBreakMinutes,
-                    onDailyTargetChange = viewModel::updateDailyTarget
+                    onDailyTargetChange = viewModel::updateDailyTarget,
+                    onNotificationsEnabledChange = viewModel::updateNotificationsEnabled,
+                    onNotificationOffsetChange = viewModel::updateNotificationOffset
                 )
             }
         }

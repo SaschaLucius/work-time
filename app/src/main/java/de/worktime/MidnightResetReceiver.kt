@@ -35,23 +35,28 @@ class MidnightResetReceiver : BroadcastReceiver() {
 
     private suspend fun handleMidnightReset(context: Context) {
         WorkSessionStore(context).resetSession()
+        cancelTargetNotification(context)
         WorkTimeWidget().updateAll(context)
     }
 
     private suspend fun handleBootCompleted(context: Context) {
         val store = WorkSessionStore(context)
         val session = store.session.first()
+        val settings = store.settings.first()
         when {
             // Alte Session von gestern → löschen
             session.isRunning && session.sessionDate != LocalDate.now().toString() -> {
                 store.resetSession()
+                cancelTargetNotification(context)
             }
             // Heutige Session noch aktiv → Alarme neu planen (gehen bei
             // Reboot und App-Update verloren)
             session.isRunning -> {
                 scheduleNextMidnightAlarm(context)
                 scheduleWidgetTick(context, session.startTimeMillis)
+                scheduleTargetNotification(context, session.startTimeMillis, settings)
             }
+            else -> cancelTargetNotification(context)
         }
         WorkTimeWidget().updateAll(context)
     }
