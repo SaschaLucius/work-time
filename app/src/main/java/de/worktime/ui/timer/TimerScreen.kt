@@ -8,16 +8,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,15 +29,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.worktime.domain.WorkTimeCalculator
+import de.worktime.data.WorkSessionStore
 import de.worktime.ui.MainViewModel
 import de.worktime.ui.TimerUiState
+import de.worktime.ui.common.ZeitPickerDialog
 import java.util.Calendar
+import java.time.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TimerScreen(viewModel: MainViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var showStartPicker by rememberSaveable { mutableStateOf(false) }
+    var showEndDayDialog by rememberSaveable { mutableStateOf(false) }
+    val currentDay = LocalDate.now().dayOfWeek
+    val isWorkDay = currentDay in WorkSessionStore.WORK_DAYS
 
     Column(
         modifier = Modifier
@@ -117,6 +121,30 @@ fun TimerScreen(viewModel: MainViewModel) {
             )
         }
 
+        Spacer(Modifier.height(12.dp))
+
+        Button(
+            onClick = { showEndDayDialog = true },
+            enabled = state.isRunning && isWorkDay,
+            modifier = Modifier
+                .fillMaxWidth(0.55f)
+                .height(52.dp)
+        ) {
+            Text(
+                text = "Tag beenden",
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
+
+        if (!isWorkDay) {
+            Text(
+                text = "Tag beenden ist nur Montag bis Freitag möglich.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
+
         Spacer(Modifier.height(16.dp))
 
         // Sekundäre Aktionen
@@ -146,29 +174,75 @@ fun TimerScreen(viewModel: MainViewModel) {
                 if (state.startTimeMillis > 0) timeInMillis = state.startTimeMillis
             }
         }
-        val pickerState = rememberTimePickerState(
+        ZeitPickerDialog(
+            title = "Startzeit anpassen",
             initialHour = currentCal.get(Calendar.HOUR_OF_DAY),
             initialMinute = currentCal.get(Calendar.MINUTE),
-            is24Hour = true
+            onConfirm = { hour, minute ->
+                showStartPicker = false
+                val cal = Calendar.getInstance().apply {
+                    set(Calendar.HOUR_OF_DAY, hour)
+                    set(Calendar.MINUTE, minute)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                viewModel.adjustStartTime(cal.timeInMillis)
+            },
+            onDismiss = { showStartPicker = false }
         )
+    }
+
+    if (showEndDayDialog) {
+        val existingEntry = state.weekEntries[currentDay]
+        val overwritesEntry = existingEntry?.hasValue == true
         AlertDialog(
-            onDismissRequest = { showStartPicker = false },
-            title = { Text("Startzeit anpassen") },
-            text = { TimePicker(state = pickerState) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showStartPicker = false
-                    val cal = Calendar.getInstance().apply {
-                        set(Calendar.HOUR_OF_DAY, pickerState.hour)
-                        set(Calendar.MINUTE, pickerState.minute)
-                        set(Calendar.SECOND, 0)
-                        set(Calendar.MILLISECOND, 0)
+            onDismissRequest = { showEndDayDialog = false },
+            title = { Text("${dayName(currentDay)} beenden?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "${formatStartTime(state.startTimeMillis)} bis " +
+                            formatCurrentTime()
+                    )
+                    Text(
+                        "Netto ${WorkTimeCalculator.formatDuration(state.netMinutes)}, " +
+                            "${state.requiredBreakMinutes} Min. Pause"
+                    )
+                    if (overwritesEntry) {
+                        Text(
+                            text = "Der vorhandene Eintrag für heute wird überschrieben.",
+                            color = MaterialTheme.colorScheme.error
+                        )
                     }
-                    viewModel.adjustStartTime(cal.timeInMillis)
-                }) { Text("OK") }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showEndDayDialog = false
+                        viewModel.endDay()
+                    }
+                ) {
+                    Text(if (overwritesEntry) "Überschreiben" else "Tag beenden")
+                }
             },
             dismissButton = {
-                TextButton(onClick = { showStartPicker = false }) { Text("Abbrechen") }
+                TextButton(onClick = { showEndDayDialog = false }) {
+                    Text("Abbrechen")
+                }
+            }
+        )
+    }
+
+    state.endDayError?.let { message ->
+        AlertDialog(
+            onDismissRequest = viewModel::clearEndDayError,
+            title = { Text("Speichern fehlgeschlagen") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = viewModel::clearEndDayError) {
+                    Text("OK")
+                }
             }
         )
     }
@@ -209,4 +283,22 @@ private fun formatStartTime(startTimeMillis: Long): String {
     if (startTimeMillis <= 0) return "--:--"
     val cal = Calendar.getInstance().apply { timeInMillis = startTimeMillis }
     return "%02d:%02d".format(cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE))
+}
+
+private fun formatCurrentTime(): String {
+    val calendar = Calendar.getInstance()
+    return "%02d:%02d".format(
+        calendar.get(Calendar.HOUR_OF_DAY),
+        calendar.get(Calendar.MINUTE)
+    )
+}
+
+private fun dayName(day: java.time.DayOfWeek): String = when (day) {
+    java.time.DayOfWeek.MONDAY -> "Montag"
+    java.time.DayOfWeek.TUESDAY -> "Dienstag"
+    java.time.DayOfWeek.WEDNESDAY -> "Mittwoch"
+    java.time.DayOfWeek.THURSDAY -> "Donnerstag"
+    java.time.DayOfWeek.FRIDAY -> "Freitag"
+    java.time.DayOfWeek.SATURDAY -> "Samstag"
+    java.time.DayOfWeek.SUNDAY -> "Sonntag"
 }

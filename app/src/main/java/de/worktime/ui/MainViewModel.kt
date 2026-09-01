@@ -15,6 +15,7 @@ import de.worktime.widget.WorkTimeWidget
 import de.worktime.widget.cancelWidgetTick
 import de.worktime.widget.scheduleWidgetTick
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.ZoneId
 
 data class TimerUiState(
@@ -31,6 +33,7 @@ data class TimerUiState(
     val netMinutes: Int = 0,
     val grossMinutes: Int = 0,
     val requiredBreakMinutes: Int = 0,
+    val endDayError: String? = null,
     val settings: WorkSessionStore.AppSettings = WorkSessionStore.AppSettings(),
     val weekEntries: Map<DayOfWeek, WorkSessionStore.WeekEntry> =
         WorkSessionStore.WORK_DAYS.associateWith { WorkSessionStore.WeekEntry() }
@@ -153,6 +156,52 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun resetWeek() {
         viewModelScope.launch { store.resetWeek() }
+    }
+
+    fun endDay() {
+        val currentState = _state.value
+        val day = LocalDate.now().dayOfWeek
+        if (!currentState.isRunning || currentState.startTimeMillis <= 0 ||
+            day !in WorkSessionStore.WORK_DAYS
+        ) return
+
+        val endTimeMillis = (System.currentTimeMillis() / 60_000) * 60_000
+        val startTime = Instant.ofEpochMilli(currentState.startTimeMillis)
+            .atZone(ZoneId.systemDefault())
+            .toLocalTime()
+        val endTime = Instant.ofEpochMilli(endTimeMillis)
+            .atZone(ZoneId.systemDefault())
+            .toLocalTime()
+        val startMinutes = startTime.hour * 60 + startTime.minute
+        val endMinutes = endTime.hour * 60 + endTime.minute
+
+        viewModelScope.launch {
+            try {
+                store.saveDayAndResetSession(day, startMinutes, endMinutes)
+                tickJob?.cancel()
+                cancelMidnightReset()
+                cancelWidgetTick(getApplication())
+                _state.update {
+                    TimerUiState(
+                        settings = it.settings,
+                        weekEntries = it.weekEntries + (
+                            day to WorkSessionStore.WeekEntry(startMinutes, endMinutes)
+                        )
+                    )
+                }
+                WorkTimeWidget().updateAll(getApplication())
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: Exception) {
+                _state.update {
+                    it.copy(endDayError = "Der Arbeitstag konnte nicht gespeichert werden.")
+                }
+            }
+        }
+    }
+
+    fun clearEndDayError() {
+        _state.update { it.copy(endDayError = null) }
     }
 
     private fun startTicker(startTimeMillis: Long) {
