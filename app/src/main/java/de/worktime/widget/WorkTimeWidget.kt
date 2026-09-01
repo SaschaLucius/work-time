@@ -99,15 +99,21 @@ class WorkTimeWidget : GlanceAppWidget() {
             val session by store.session.collectAsState(
                 initial = null
             )
+            val settings by store.settings.collectAsState(
+                initial = WorkSessionStore.AppSettings()
+            )
             GlanceTheme {
-                WidgetContent(session = session)
+                WidgetContent(session = session, settings = settings)
             }
         }
     }
 }
 
 @androidx.compose.runtime.Composable
-private fun WidgetContent(session: WorkSessionStore.WorkSession?) {
+private fun WidgetContent(
+    session: WorkSessionStore.WorkSession?,
+    settings: WorkSessionStore.AppSettings
+) {
     val size = LocalSize.current
     val widgetWidth = size.width.value
     val widgetHeight = size.height.value
@@ -118,8 +124,8 @@ private fun WidgetContent(session: WorkSessionStore.WorkSession?) {
     val grossMinutes = if (isRunning && session != null) {
         ((System.currentTimeMillis() - session.startTimeMillis).coerceAtLeast(0) / 60_000).toInt()
     } else 0
-    val netMinutes = WorkTimeCalculator.calculateNetMinutes(grossMinutes)
-    val breakMinutes = WorkTimeCalculator.requiredBreakMinutes(grossMinutes)
+    val netMinutes = WorkTimeCalculator.calculateNetMinutes(grossMinutes, settings.breakConfig)
+    val breakMinutes = WorkTimeCalculator.requiredBreakMinutes(grossMinutes, settings.breakConfig)
 
     // Scale by width, but cap at a fraction of height so the text never
     // overflows a short widget (e.g. 4×1) and loses its vertical centering.

@@ -10,16 +10,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -31,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.worktime.domain.WorkTimeCalculator
+import de.worktime.ui.common.ZeitPickerDialog
 
 private data class DayTime(val hour: Int, val minute: Int)
 
@@ -42,7 +39,7 @@ private data class DayState(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WochensaldoScreen() {
+fun WochensaldoScreen(breakConfig: WorkTimeCalculator.BreakConfig) {
     // Mo=0, Di=1, Mi=2, Do=3, Fr=4
     val dayLabels = listOf("Mo", "Di", "Mi", "Do", "Fr")
 
@@ -61,7 +58,7 @@ fun WochensaldoScreen() {
         val e = endTimes[i]
         if (s != null && e != null) {
             val gross = (e.hour * 60 + e.minute) - (s.hour * 60 + s.minute)
-            WorkTimeCalculator.calculateNetMinutes(gross.coerceAtLeast(0))
+            WorkTimeCalculator.calculateNetMinutes(gross.coerceAtLeast(0), breakConfig)
         } else null
     }
 
@@ -134,32 +131,23 @@ fun WochensaldoScreen() {
     // Time picker dialog
     activePicker?.let { (dayIndex, isStart) ->
         val current = if (isStart) startTimes[dayIndex] else endTimes[dayIndex]
-        val pickerState = rememberTimePickerState(
-            initialHour = current?.hour ?: 8,
-            initialMinute = current?.minute ?: 0,
-            is24Hour = true
-        )
         val dayLabel = dayLabels[dayIndex]
         val pickerTitle = if (isStart) "Start $dayLabel" else "Ende $dayLabel"
 
-        AlertDialog(
-            onDismissRequest = { activePicker = null },
-            title = { Text(pickerTitle) },
-            text = { TimePicker(state = pickerState) },
-            confirmButton = {
-                TextButton(onClick = {
-                    val newTime = DayTime(pickerState.hour, pickerState.minute)
-                    if (isStart) {
-                        startTimes = startTimes.toMutableList().also { it[dayIndex] = newTime }
-                    } else {
-                        endTimes = endTimes.toMutableList().also { it[dayIndex] = newTime }
-                    }
-                    activePicker = null
-                }) { Text("OK") }
+        ZeitPickerDialog(
+            title = pickerTitle,
+            initialHour = current?.hour ?: 8,
+            initialMinute = current?.minute ?: 0,
+            onConfirm = { hour, minute ->
+                val newTime = DayTime(hour, minute)
+                if (isStart) {
+                    startTimes = startTimes.toMutableList().also { it[dayIndex] = newTime }
+                } else {
+                    endTimes = endTimes.toMutableList().also { it[dayIndex] = newTime }
+                }
+                activePicker = null
             },
-            dismissButton = {
-                TextButton(onClick = { activePicker = null }) { Text("Abbrechen") }
-            }
+            onDismiss = { activePicker = null }
         )
     }
 }

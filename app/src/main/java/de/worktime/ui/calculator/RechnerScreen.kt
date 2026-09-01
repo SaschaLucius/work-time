@@ -8,21 +8,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -31,18 +26,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.worktime.domain.WorkTimeCalculator
+import de.worktime.ui.common.ZeitPickerDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RechnerScreen() {
+fun RechnerScreen(breakConfig: WorkTimeCalculator.BreakConfig) {
     var startHour by rememberSaveable { mutableIntStateOf(8) }
     var startMinute by rememberSaveable { mutableIntStateOf(30) }
     var endHour by rememberSaveable { mutableIntStateOf(17) }
     var endMinute by rememberSaveable { mutableIntStateOf(0) }
 
     val gross = ((endHour * 60 + endMinute) - (startHour * 60 + startMinute)).coerceAtLeast(0)
-    val net = WorkTimeCalculator.calculateNetMinutes(gross)
-    val pause = WorkTimeCalculator.requiredBreakMinutes(gross)
+    val net = WorkTimeCalculator.calculateNetMinutes(gross, breakConfig)
+    val pause = WorkTimeCalculator.requiredBreakMinutes(gross, breakConfig)
 
     var showStartPicker by rememberSaveable { mutableStateOf(false) }
     var showEndPicker by rememberSaveable { mutableStateOf(false) }
@@ -145,49 +141,31 @@ fun RechnerScreen() {
 
     // Start-Zeitpicker
     if (showStartPicker) {
-        val pickerState = rememberTimePickerState(
+        ZeitPickerDialog(
+            title = "Startzeit",
             initialHour = startHour,
             initialMinute = startMinute,
-            is24Hour = true
-        )
-        AlertDialog(
-            onDismissRequest = { showStartPicker = false },
-            title = { Text("Startzeit") },
-            text = { TimePicker(state = pickerState) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showStartPicker = false
-                    startHour = pickerState.hour
-                    startMinute = pickerState.minute
-                    }) { Text("OK") }
+            onConfirm = { hour, minute ->
+                startHour = hour
+                startMinute = minute
+                showStartPicker = false
             },
-            dismissButton = {
-                TextButton(onClick = { showStartPicker = false }) { Text("Abbrechen") }
-            }
+            onDismiss = { showStartPicker = false }
         )
     }
 
     // End-Zeitpicker
     if (showEndPicker) {
-        val pickerState = rememberTimePickerState(
+        ZeitPickerDialog(
+            title = "Endzeit",
             initialHour = endHour,
             initialMinute = endMinute,
-            is24Hour = true
-        )
-        AlertDialog(
-            onDismissRequest = { showEndPicker = false },
-            title = { Text("Endzeit") },
-            text = { TimePicker(state = pickerState) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showEndPicker = false
-                    endHour = pickerState.hour
-                    endMinute = pickerState.minute
-                    }) { Text("OK") }
+            onConfirm = { hour, minute ->
+                endHour = hour
+                endMinute = minute
+                showEndPicker = false
             },
-            dismissButton = {
-                TextButton(onClick = { showEndPicker = false }) { Text("Abbrechen") }
-            }
+            onDismiss = { showEndPicker = false }
         )
     }
 }

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -16,7 +17,9 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -24,6 +27,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import de.worktime.ui.calculator.RechnerScreen
+import de.worktime.ui.settings.SettingsScreen
 import de.worktime.ui.theme.ArbeitsTheme
 import de.worktime.ui.timer.TimerScreen
 import de.worktime.ui.woche.WochensaldoScreen
@@ -46,11 +50,15 @@ private data class NavTab(val route: String, val label: String, val icon: @Compo
 private fun ArbeitsApp() {
     val navController = rememberNavController()
     val viewModel: MainViewModel = viewModel()
+    val state by viewModel.state.collectAsStateWithLifecycle()
 
     val tabs = listOf(
         NavTab("timer", "Timer") { Icon(Icons.Default.Timer, contentDescription = "Timer") },
         NavTab("rechner", "Rechner") { Icon(Icons.Default.Calculate, contentDescription = "Rechner") },
-        NavTab("woche", "Woche") { Icon(Icons.Default.DateRange, contentDescription = "Woche") }
+        NavTab("woche", "Woche") { Icon(Icons.Default.DateRange, contentDescription = "Woche") },
+        NavTab("settings", "Einstellungen") {
+            Icon(Icons.Default.Settings, contentDescription = "Einstellungen")
+        }
     )
 
     Scaffold(
@@ -85,8 +93,15 @@ private fun ArbeitsApp() {
                 .padding(innerPadding)
         ) {
             composable("timer") { TimerScreen(viewModel) }
-            composable("rechner") { RechnerScreen() }
-            composable("woche") { WochensaldoScreen() }
+            composable("rechner") { RechnerScreen(state.settings.breakConfig) }
+            composable("woche") { WochensaldoScreen(state.settings.breakConfig) }
+            composable("settings") {
+                SettingsScreen(
+                    settings = state.settings,
+                    onBreakMinutesChange = viewModel::updateBreakMinutes,
+                    onDailyTargetChange = viewModel::updateDailyTarget
+                )
+            }
         }
     }
 }

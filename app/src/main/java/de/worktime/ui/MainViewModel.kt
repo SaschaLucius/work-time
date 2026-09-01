@@ -29,7 +29,8 @@ data class TimerUiState(
     val startTimeMillis: Long = -1L,
     val netMinutes: Int = 0,
     val grossMinutes: Int = 0,
-    val requiredBreakMinutes: Int = 0
+    val requiredBreakMinutes: Int = 0,
+    val settings: WorkSessionStore.AppSettings = WorkSessionStore.AppSettings()
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -60,6 +61,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     recalculate(session.startTimeMillis)
                     _state.update { it.copy(startTimeMillis = session.startTimeMillis) }
                 }
+            }
+        }
+        viewModelScope.launch {
+            store.settings.collect { settings ->
+                _state.update { it.copy(settings = settings) }
+                val startTimeMillis = _state.value.startTimeMillis
+                if (startTimeMillis > 0) recalculate(startTimeMillis)
+                WorkTimeWidget().updateAll(getApplication())
             }
         }
     }
@@ -93,7 +102,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             tickJob?.cancel()
             cancelMidnightReset()
             cancelWidgetTick(getApplication())
-            _state.update { TimerUiState() }
+            _state.update { TimerUiState(settings = it.settings) }
             WorkTimeWidget().updateAll(getApplication())
         }
     }
@@ -106,6 +115,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (_state.value.isRunning) {
                 startTicker(newStartMillis)
             }
+        }
+    }
+
+    fun updateBreakMinutes(firstBreakMinutes: Int, secondBreakMinutes: Int) {
+        viewModelScope.launch {
+            store.updateBreakMinutes(firstBreakMinutes, secondBreakMinutes)
+        }
+    }
+
+    fun updateDailyTarget(minutes: Int) {
+        viewModelScope.launch {
+            store.updateDailyTarget(minutes)
         }
     }
 
@@ -122,8 +143,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun recalculate(startTimeMillis: Long) {
         val grossMs = (System.currentTimeMillis() - startTimeMillis).coerceAtLeast(0)
         val grossMinutes = (grossMs / 60_000).toInt()
-        val netMinutes = WorkTimeCalculator.calculateNetMinutes(grossMinutes)
-        val breakMinutes = WorkTimeCalculator.requiredBreakMinutes(grossMinutes)
+        val breakConfig = _state.value.settings.breakConfig
+        val netMinutes = WorkTimeCalculator.calculateNetMinutes(grossMinutes, breakConfig)
+        val breakMinutes = WorkTimeCalculator.requiredBreakMinutes(grossMinutes, breakConfig)
         _state.update {
             it.copy(
                 grossMinutes = grossMinutes,
