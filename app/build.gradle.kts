@@ -79,5 +79,6 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.google.material)
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
     debugImplementation(libs.androidx.ui.tooling)
 }
