@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.DayOfWeek
 import java.time.ZoneId
 
 data class TimerUiState(
@@ -30,7 +31,9 @@ data class TimerUiState(
     val netMinutes: Int = 0,
     val grossMinutes: Int = 0,
     val requiredBreakMinutes: Int = 0,
-    val settings: WorkSessionStore.AppSettings = WorkSessionStore.AppSettings()
+    val settings: WorkSessionStore.AppSettings = WorkSessionStore.AppSettings(),
+    val weekEntries: Map<DayOfWeek, WorkSessionStore.WeekEntry> =
+        WorkSessionStore.WORK_DAYS.associateWith { WorkSessionStore.WeekEntry() }
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -71,6 +74,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 WorkTimeWidget().updateAll(getApplication())
             }
         }
+        viewModelScope.launch {
+            store.weekEntries.collect { entries ->
+                _state.update { it.copy(weekEntries = entries) }
+            }
+        }
     }
 
     fun start() {
@@ -102,7 +110,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             tickJob?.cancel()
             cancelMidnightReset()
             cancelWidgetTick(getApplication())
-            _state.update { TimerUiState(settings = it.settings) }
+            _state.update {
+                TimerUiState(
+                    settings = it.settings,
+                    weekEntries = it.weekEntries
+                )
+            }
             WorkTimeWidget().updateAll(getApplication())
         }
     }
@@ -128,6 +141,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             store.updateDailyTarget(minutes)
         }
+    }
+
+    fun updateWeekStart(day: DayOfWeek, minutes: Int) {
+        viewModelScope.launch { store.updateWeekStart(day, minutes) }
+    }
+
+    fun updateWeekEnd(day: DayOfWeek, minutes: Int) {
+        viewModelScope.launch { store.updateWeekEnd(day, minutes) }
+    }
+
+    fun resetWeek() {
+        viewModelScope.launch { store.resetWeek() }
     }
 
     private fun startTicker(startTimeMillis: Long) {

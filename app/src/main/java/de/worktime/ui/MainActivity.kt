@@ -94,7 +94,15 @@ private fun ArbeitsApp() {
         ) {
             composable("timer") { TimerScreen(viewModel) }
             composable("rechner") { RechnerScreen(state.settings.breakConfig) }
-            composable("woche") { WochensaldoScreen(state.settings.breakConfig) }
+            composable("woche") {
+                WochensaldoScreen(
+                    entries = state.weekEntries,
+                    breakConfig = state.settings.breakConfig,
+                    onStartChange = viewModel::updateWeekStart,
+                    onEndChange = viewModel::updateWeekEnd,
+                    onResetWeek = viewModel::resetWeek
+                )
+            }
             composable("settings") {
                 SettingsScreen(
                     settings = state.settings,

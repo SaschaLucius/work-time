@@ -11,11 +11,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,38 +31,33 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import de.worktime.data.WorkSessionStore
 import de.worktime.domain.WorkTimeCalculator
 import de.worktime.ui.common.ZeitPickerDialog
-
-private data class DayTime(val hour: Int, val minute: Int)
-
-private data class DayState(
-    val label: String,
-    val start: DayTime?,
-    val end: DayTime?
-)
+import java.time.DayOfWeek
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WochensaldoScreen(breakConfig: WorkTimeCalculator.BreakConfig) {
-    // Mo=0, Di=1, Mi=2, Do=3, Fr=4
+fun WochensaldoScreen(
+    entries: Map<DayOfWeek, WorkSessionStore.WeekEntry>,
+    breakConfig: WorkTimeCalculator.BreakConfig,
+    onStartChange: (DayOfWeek, Int) -> Unit,
+    onEndChange: (DayOfWeek, Int) -> Unit,
+    onResetWeek: () -> Unit
+) {
+    val workDays = WorkSessionStore.WORK_DAYS
     val dayLabels = listOf("Mo", "Di", "Mi", "Do", "Fr")
-
-    var startTimes by rememberSaveable {
-        mutableStateOf(List<DayTime?>(5) { null })
-    }
-    var endTimes by rememberSaveable {
-        mutableStateOf(List<DayTime?>(5) { null })
-    }
 
     // which picker is open: Pair(dayIndex, isStart)
     var activePicker by rememberSaveable { mutableStateOf<Pair<Int, Boolean>?>(null) }
+    var showResetDialog by rememberSaveable { mutableStateOf(false) }
 
     val netMinutesPerDay: List<Int?> = (0..4).map { i ->
-        val s = startTimes[i]
-        val e = endTimes[i]
-        if (s != null && e != null) {
-            val gross = (e.hour * 60 + e.minute) - (s.hour * 60 + s.minute)
+        val entry = entries[workDays[i]] ?: WorkSessionStore.WeekEntry()
+        val start = entry.startMinutes
+        val end = entry.endMinutes
+        if (start != null && end != null) {
+            val gross = end - start
             WorkTimeCalculator.calculateNetMinutes(gross.coerceAtLeast(0), breakConfig)
         } else null
     }
@@ -85,11 +85,12 @@ fun WochensaldoScreen(breakConfig: WorkTimeCalculator.BreakConfig) {
 
         Spacer(Modifier.height(24.dp))
 
-        (0..4).forEach { i ->
+        workDays.forEachIndexed { i, day ->
+            val entry = entries[day] ?: WorkSessionStore.WeekEntry()
             TagZeile(
                 label = dayLabels[i],
-                start = startTimes[i],
-                end = endTimes[i],
+                startMinutes = entry.startMinutes,
+                endMinutes = entry.endMinutes,
                 netMinutes = netMinutesPerDay[i],
                 onStartClick = { activePicker = Pair(i, true) },
                 onEndClick = { activePicker = Pair(i, false) }
@@ -97,6 +98,16 @@ fun WochensaldoScreen(breakConfig: WorkTimeCalculator.BreakConfig) {
             if (i < 4) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        OutlinedButton(
+            onClick = { showResetDialog = true },
+            enabled = entries.values.any { entry -> entry.hasValue },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Default.RestartAlt, contentDescription = null)
+            Text("Woche zurücksetzen", modifier = Modifier.padding(start = 8.dp))
         }
 
         Spacer(Modifier.height(24.dp))
@@ -130,24 +141,49 @@ fun WochensaldoScreen(breakConfig: WorkTimeCalculator.BreakConfig) {
 
     // Time picker dialog
     activePicker?.let { (dayIndex, isStart) ->
-        val current = if (isStart) startTimes[dayIndex] else endTimes[dayIndex]
+        val day = workDays[dayIndex]
+        val entry = entries[day] ?: WorkSessionStore.WeekEntry()
+        val current = if (isStart) entry.startMinutes else entry.endMinutes
         val dayLabel = dayLabels[dayIndex]
         val pickerTitle = if (isStart) "Start $dayLabel" else "Ende $dayLabel"
 
         ZeitPickerDialog(
             title = pickerTitle,
-            initialHour = current?.hour ?: 8,
-            initialMinute = current?.minute ?: 0,
+            initialHour = current?.div(60) ?: 8,
+            initialMinute = current?.rem(60) ?: 0,
             onConfirm = { hour, minute ->
-                val newTime = DayTime(hour, minute)
+                val newTime = hour * 60 + minute
                 if (isStart) {
-                    startTimes = startTimes.toMutableList().also { it[dayIndex] = newTime }
+                    onStartChange(day, newTime)
                 } else {
-                    endTimes = endTimes.toMutableList().also { it[dayIndex] = newTime }
+                    onEndChange(day, newTime)
                 }
                 activePicker = null
             },
             onDismiss = { activePicker = null }
+        )
+    }
+
+    if (showResetDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetDialog = false },
+            title = { Text("Woche zurücksetzen?") },
+            text = { Text("Alle Start- und Endzeiten von Montag bis Freitag werden gelöscht.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showResetDialog = false
+                        onResetWeek()
+                    }
+                ) {
+                    Text("Zurücksetzen")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetDialog = false }) {
+                    Text("Abbrechen")
+                }
+            }
         )
     }
 }
@@ -155,8 +191,8 @@ fun WochensaldoScreen(breakConfig: WorkTimeCalculator.BreakConfig) {
 @Composable
 private fun TagZeile(
     label: String,
-    start: DayTime?,
-    end: DayTime?,
+    startMinutes: Int?,
+    endMinutes: Int?,
     netMinutes: Int?,
     onStartClick: () -> Unit,
     onEndClick: () -> Unit
@@ -180,7 +216,7 @@ private fun TagZeile(
             modifier = Modifier.weight(1f)
         ) {
             Text(
-                text = start?.let { "%02d:%02d".format(it.hour, it.minute) } ?: "--:--",
+                text = startMinutes?.let(::formatTime) ?: "--:--",
                 style = MaterialTheme.typography.bodyMedium
             )
         }
@@ -189,7 +225,7 @@ private fun TagZeile(
             modifier = Modifier.weight(1f)
         ) {
             Text(
-                text = end?.let { "%02d:%02d".format(it.hour, it.minute) } ?: "--:--",
+                text = endMinutes?.let(::formatTime) ?: "--:--",
                 style = MaterialTheme.typography.bodyMedium
             )
         }
@@ -203,3 +239,5 @@ private fun TagZeile(
         )
     }
 }
+
+private fun formatTime(minutes: Int): String = "%02d:%02d".format(minutes / 60, minutes % 60)
