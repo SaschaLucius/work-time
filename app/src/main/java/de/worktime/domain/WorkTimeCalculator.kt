@@ -12,24 +12,52 @@ object WorkTimeCalculator {
 
     private const val THRESHOLD_30_MIN = 6 * 60        // 360 Min. Brutto
     private const val THRESHOLD_45_MIN = 9 * 60 + 30   // 570 Min. Brutto
-    private const val BREAK_30 = 30
-    private const val BREAK_45 = 45
+
+    data class BreakConfig(
+        val firstBreakMinutes: Int = 30,
+        val secondBreakMinutes: Int = 45
+    ) {
+        init {
+            require(firstBreakMinutes >= 0) { "First break must not be negative" }
+            require(secondBreakMinutes >= firstBreakMinutes) {
+                "Second break must be at least as long as the first break"
+            }
+        }
+    }
 
     /** Tagesarbeitszeit-Maximum nach ArbZG §3 (normal 8 Std., maximal 10 Std.). */
     const val MAX_NET_MINUTES = 10 * 60
 
     /** Berechnet Netto-Minuten aus Brutto-Minuten (= verstrichene Zeit seit Start). */
-    fun calculateNetMinutes(grossMinutes: Int): Int = when {
+    fun calculateNetMinutes(
+        grossMinutes: Int,
+        breakConfig: BreakConfig = BreakConfig()
+    ): Int = when {
         grossMinutes <= THRESHOLD_30_MIN -> grossMinutes
-        grossMinutes <= THRESHOLD_45_MIN -> grossMinutes - BREAK_30
-        else -> grossMinutes - BREAK_45
-    }
+        grossMinutes <= THRESHOLD_45_MIN -> grossMinutes - breakConfig.firstBreakMinutes
+        else -> grossMinutes - breakConfig.secondBreakMinutes
+    }.coerceAtLeast(0)
 
     /** Gibt die gesetzlich erforderliche Pausendauer in Minuten zurück. */
-    fun requiredBreakMinutes(grossMinutes: Int): Int = when {
+    fun requiredBreakMinutes(
+        grossMinutes: Int,
+        breakConfig: BreakConfig = BreakConfig()
+    ): Int = when {
         grossMinutes <= THRESHOLD_30_MIN -> 0
-        grossMinutes <= THRESHOLD_45_MIN -> BREAK_30
-        else -> BREAK_45
+        grossMinutes <= THRESHOLD_45_MIN -> breakConfig.firstBreakMinutes
+        else -> breakConfig.secondBreakMinutes
+    }
+
+    /** Gibt die früheste Brutto-Minute zurück, in der das Netto-Ziel erreicht ist. */
+    fun grossMinutesToReachNetTarget(
+        targetNetMinutes: Int,
+        breakConfig: BreakConfig = BreakConfig()
+    ): Int {
+        val target = targetNetMinutes.coerceAtLeast(0)
+        val latestCandidate = target + breakConfig.secondBreakMinutes
+        return (0..latestCandidate).first { grossMinutes ->
+            calculateNetMinutes(grossMinutes, breakConfig) >= target
+        }
     }
 
     /** Prüft ob die gesetzliche Höchstarbeitszeit (10 Std.) überschritten wurde. */
@@ -45,8 +73,12 @@ object WorkTimeCalculator {
      * Berechnet Netto-Minuten aus Startzeit und Endzeit
      * (beide als Minuten seit Mitternacht).
      */
-    fun calculateFromStartEnd(startMinutes: Int, endMinutes: Int): Int {
+    fun calculateFromStartEnd(
+        startMinutes: Int,
+        endMinutes: Int,
+        breakConfig: BreakConfig = BreakConfig()
+    ): Int {
         val gross = (endMinutes - startMinutes).coerceAtLeast(0)
-        return calculateNetMinutes(gross)
+        return calculateNetMinutes(gross, breakConfig)
     }
 }
