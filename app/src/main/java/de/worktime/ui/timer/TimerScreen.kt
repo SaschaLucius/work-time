@@ -107,31 +107,18 @@ fun TimerScreen(viewModel: MainViewModel) {
 
         Spacer(Modifier.height(40.dp))
 
-        // Start
+        // Primäre Timer-Aktion
         Button(
-            onClick = { viewModel.start() },
-            enabled = !state.isRunning,
+            onClick = {
+                if (state.isRunning) showEndDayDialog = true else viewModel.start()
+            },
+            enabled = !state.isRunning || isWorkDay,
             modifier = Modifier
                 .fillMaxWidth(0.55f)
                 .height(52.dp)
         ) {
             Text(
-                text = "Start",
-                style = MaterialTheme.typography.titleMedium
-            )
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        Button(
-            onClick = { showEndDayDialog = true },
-            enabled = state.isRunning && isWorkDay,
-            modifier = Modifier
-                .fillMaxWidth(0.55f)
-                .height(52.dp)
-        ) {
-            Text(
-                text = "Tag beenden",
+                text = if (state.isRunning) "Tag beenden" else "Start",
                 style = MaterialTheme.typography.titleMedium
             )
         }
