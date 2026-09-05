@@ -113,6 +113,26 @@ class WorkSessionStoreTest {
     }
 
     @Test
+    fun `saving monday can clear previous week atomically`() = runTest {
+        val store = createStore()
+        store.updateWeekStart(DayOfWeek.FRIDAY, 8 * 60)
+        store.updateWeekEnd(DayOfWeek.FRIDAY, 16 * 60)
+        store.startSession(123_000L)
+
+        store.saveDayAndResetSession(
+            DayOfWeek.MONDAY,
+            9 * 60,
+            17 * 60,
+            clearWeekBeforeSave = true
+        )
+
+        val entries = store.weekEntries.first()
+        assertEquals(9 * 60, entries.getValue(DayOfWeek.MONDAY).startMinutes)
+        assertFalse(entries.getValue(DayOfWeek.FRIDAY).hasValue)
+        assertFalse(store.session.first().isRunning)
+    }
+
+    @Test
     fun `weekend entries are rejected without clearing the session`() = runTest {
         val store = createStore()
         store.startSession(123_000L)

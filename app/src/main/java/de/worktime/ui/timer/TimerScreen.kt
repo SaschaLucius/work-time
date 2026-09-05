@@ -182,11 +182,18 @@ fun TimerScreen(viewModel: MainViewModel) {
     if (showEndDayDialog) {
         val existingEntry = state.weekEntries[currentDay]
         val overwritesEntry = existingEntry?.hasValue == true
+        val offersWeekReset = currentDay == java.time.DayOfWeek.MONDAY &&
+            state.weekEntries.values.any { entry -> entry.hasValue }
         AlertDialog(
             onDismissRequest = { showEndDayDialog = false },
-            title = { Text("${dayName(currentDay)} beenden?") },
+            title = {
+                Text(if (offersWeekReset) "Vorwoche löschen?" else "${dayName(currentDay)} beenden?")
+            },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (offersWeekReset) {
+                        Text("Es sind noch Einträge aus der vorherigen Woche vorhanden.")
+                    }
                     Text(
                         "${formatStartTime(state.startTimeMillis)} bis " +
                             formatCurrentTime()
@@ -207,15 +214,26 @@ fun TimerScreen(viewModel: MainViewModel) {
                 TextButton(
                     onClick = {
                         showEndDayDialog = false
-                        viewModel.endDay()
+                        viewModel.endDay(clearWeekBeforeSave = offersWeekReset)
                     }
                 ) {
-                    Text(if (overwritesEntry) "Überschreiben" else "Tag beenden")
+                    Text(
+                        when {
+                            offersWeekReset -> "Löschen & beenden"
+                            overwritesEntry -> "Überschreiben"
+                            else -> "Tag beenden"
+                        }
+                    )
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showEndDayDialog = false }) {
-                    Text("Abbrechen")
+                TextButton(
+                    onClick = {
+                        showEndDayDialog = false
+                        if (offersWeekReset) viewModel.endDay()
+                    }
+                ) {
+                    Text(if (offersWeekReset) "Behalten & beenden" else "Abbrechen")
                 }
             }
         )

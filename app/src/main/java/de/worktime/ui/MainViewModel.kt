@@ -191,7 +191,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { store.resetWeekDay(day) }
     }
 
-    fun endDay() {
+    fun endDay(clearWeekBeforeSave: Boolean = false) {
         val currentState = _state.value
         val day = LocalDate.now().dayOfWeek
         if (!currentState.isRunning || currentState.startTimeMillis <= 0 ||
@@ -210,15 +210,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             try {
-                store.saveDayAndResetSession(day, startMinutes, endMinutes)
+                store.saveDayAndResetSession(
+                    day,
+                    startMinutes,
+                    endMinutes,
+                    clearWeekBeforeSave
+                )
                 tickJob?.cancel()
                 cancelMidnightReset()
                 cancelWidgetTick(getApplication())
                 cancelTargetNotification(getApplication())
                 _state.update {
+                    val weekEntries = if (clearWeekBeforeSave) {
+                        WorkSessionStore.WORK_DAYS.associateWith {
+                            WorkSessionStore.WeekEntry()
+                        }
+                    } else {
+                        it.weekEntries
+                    }
                     TimerUiState(
                         settings = it.settings,
-                        weekEntries = it.weekEntries + (
+                        weekEntries = weekEntries + (
                             day to WorkSessionStore.WeekEntry(startMinutes, endMinutes)
                         )
                     )

@@ -205,12 +205,19 @@ class WorkSessionStore internal constructor(
     suspend fun saveDayAndResetSession(
         day: DayOfWeek,
         startMinutes: Int,
-        endMinutes: Int
+        endMinutes: Int,
+        clearWeekBeforeSave: Boolean = false
     ) {
         requireWorkDay(day)
         requireMinutesSinceMidnight(startMinutes)
         requireMinutesSinceMidnight(endMinutes)
         dataStore.edit { prefs ->
+            if (clearWeekBeforeSave) {
+                WORK_DAYS.forEach { weekDay ->
+                    prefs.remove(startKey(weekDay))
+                    prefs.remove(endKey(weekDay))
+                }
+            }
             prefs[startKey(day)] = startMinutes
             prefs[endKey(day)] = endMinutes
             prefs[KEY_START_TIME] = -1L
