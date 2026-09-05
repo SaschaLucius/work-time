@@ -53,6 +53,7 @@ fun WochensaldoScreen(
     // which picker is open: Pair(dayIndex, isStart)
     var activePicker by rememberSaveable { mutableStateOf<Pair<Int, Boolean>?>(null) }
     var showResetDialog by rememberSaveable { mutableStateOf(false) }
+    var invalidTimeRange by rememberSaveable { mutableStateOf(false) }
 
     val netMinutesPerDay: List<Int?> = (0..4).map { i ->
         val entry = entries[workDays[i]] ?: WorkSessionStore.WeekEntry()
@@ -156,10 +157,19 @@ fun WochensaldoScreen(
             initialMinute = current?.rem(60) ?: 0,
             onConfirm = { hour, minute ->
                 val newTime = hour * 60 + minute
-                if (isStart) {
-                    onStartChange(day, newTime)
+                val isValid = if (isStart) {
+                    entry.endMinutes == null || newTime <= entry.endMinutes
                 } else {
-                    onEndChange(day, newTime)
+                    entry.startMinutes == null || entry.startMinutes <= newTime
+                }
+                if (isValid) {
+                    if (isStart) {
+                        onStartChange(day, newTime)
+                    } else {
+                        onEndChange(day, newTime)
+                    }
+                } else {
+                    invalidTimeRange = true
                 }
                 activePicker = null
             },
@@ -185,6 +195,19 @@ fun WochensaldoScreen(
             dismissButton = {
                 TextButton(onClick = { showResetDialog = false }) {
                     Text("Abbrechen")
+                }
+            }
+        )
+    }
+
+    if (invalidTimeRange) {
+        AlertDialog(
+            onDismissRequest = { invalidTimeRange = false },
+            title = { Text("Ungültiger Zeitraum") },
+            text = { Text("Die Startzeit darf nicht nach der Endzeit liegen.") },
+            confirmButton = {
+                TextButton(onClick = { invalidTimeRange = false }) {
+                    Text("OK")
                 }
             }
         )

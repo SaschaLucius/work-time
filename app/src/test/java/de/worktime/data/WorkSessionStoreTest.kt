@@ -162,6 +162,33 @@ class WorkSessionStoreTest {
         assertTrue(store.session.first().isRunning)
     }
 
+    @Test
+    fun `reversed saved day is rejected without clearing the session`() = runTest {
+        val store = createStore()
+        store.startSession(123_000L)
+
+        assertIllegalArgument {
+            store.saveDayAndResetSession(DayOfWeek.WEDNESDAY, 17 * 60, 8 * 60)
+        }
+
+        assertTrue(store.session.first().isRunning)
+        assertFalse(store.weekEntries.first().getValue(DayOfWeek.WEDNESDAY).hasValue)
+    }
+
+    @Test
+    fun `weekly edits reject a reversed interval`() = runTest {
+        val store = createStore()
+        store.updateWeekStart(DayOfWeek.MONDAY, 8 * 60)
+
+        assertIllegalArgument {
+            store.updateWeekEnd(DayOfWeek.MONDAY, 7 * 60)
+        }
+
+        val entry = store.weekEntries.first().getValue(DayOfWeek.MONDAY)
+        assertEquals(8 * 60, entry.startMinutes)
+        assertNull(entry.endMinutes)
+    }
+
     private fun kotlinx.coroutines.test.TestScope.createStore(
         todayProvider: () -> LocalDate = { LocalDate.now() }
     ): WorkSessionStore {

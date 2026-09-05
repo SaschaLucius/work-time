@@ -217,6 +217,7 @@ class WorkSessionStore internal constructor(
         requireWorkDay(day)
         requireMinutesSinceMidnight(startMinutes)
         requireMinutesSinceMidnight(endMinutes)
+        require(startMinutes <= endMinutes) { "Start time must not be after end time" }
         dataStore.edit { prefs ->
             rollOverWeekIfNeeded(prefs)
             if (clearWeekBeforeSave) {
@@ -237,6 +238,12 @@ class WorkSessionStore internal constructor(
         dataStore.edit { prefs ->
             rollOverWeekIfNeeded(prefs)
             val key = if (isStart) startKey(day) else endKey(day)
+            val otherValue = prefs[if (isStart) endKey(day) else startKey(day)]
+            if (minutes != null && otherValue != null) {
+                require(if (isStart) minutes <= otherValue else otherValue <= minutes) {
+                    "Start time must not be after end time"
+                }
+            }
             if (minutes == null) prefs.remove(key) else prefs[key] = minutes
         }
     }

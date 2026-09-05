@@ -42,6 +42,7 @@ fun TimerScreen(viewModel: MainViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var showStartPicker by rememberSaveable { mutableStateOf(false) }
     var showEndDayDialog by rememberSaveable { mutableStateOf(false) }
+    var startTimeError by rememberSaveable { mutableStateOf(false) }
     val currentDay = LocalDate.now().dayOfWeek
     val isWorkDay = currentDay in WorkSessionStore.WORK_DAYS
 
@@ -173,7 +174,11 @@ fun TimerScreen(viewModel: MainViewModel) {
                     set(Calendar.SECOND, 0)
                     set(Calendar.MILLISECOND, 0)
                 }
-                viewModel.adjustStartTime(cal.timeInMillis)
+                if (cal.timeInMillis > System.currentTimeMillis()) {
+                    startTimeError = true
+                } else {
+                    viewModel.adjustStartTime(cal.timeInMillis)
+                }
             },
             onDismiss = { showStartPicker = false }
         )
@@ -246,6 +251,19 @@ fun TimerScreen(viewModel: MainViewModel) {
             text = { Text(message) },
             confirmButton = {
                 TextButton(onClick = viewModel::clearEndDayError) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+
+    if (startTimeError) {
+        AlertDialog(
+            onDismissRequest = { startTimeError = false },
+            title = { Text("Ungültige Startzeit") },
+            text = { Text("Die Startzeit darf nicht in der Zukunft liegen.") },
+            confirmButton = {
+                TextButton(onClick = { startTimeError = false }) {
                     Text("OK")
                 }
             }

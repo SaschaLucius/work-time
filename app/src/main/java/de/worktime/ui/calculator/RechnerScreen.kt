@@ -36,7 +36,10 @@ fun RechnerScreen(breakConfig: WorkTimeCalculator.BreakConfig) {
     var endHour by rememberSaveable { mutableIntStateOf(17) }
     var endMinute by rememberSaveable { mutableIntStateOf(0) }
 
-    val gross = ((endHour * 60 + endMinute) - (startHour * 60 + startMinute)).coerceAtLeast(0)
+    val startMinutes = startHour * 60 + startMinute
+    val endMinutes = endHour * 60 + endMinute
+    val isValidRange = startMinutes <= endMinutes
+    val gross = if (isValidRange) endMinutes - startMinutes else 0
     val net = WorkTimeCalculator.calculateNetMinutes(gross, breakConfig)
     val pause = WorkTimeCalculator.requiredBreakMinutes(gross, breakConfig)
 
@@ -80,6 +83,15 @@ fun RechnerScreen(breakConfig: WorkTimeCalculator.BreakConfig) {
             onClick = { showEndPicker = true }
         )
 
+        if (!isValidRange) {
+            Text(
+                text = "Die Endzeit darf nicht vor der Startzeit liegen.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
+
         Spacer(Modifier.height(24.dp))
 
         HorizontalDivider()
@@ -101,7 +113,7 @@ fun RechnerScreen(breakConfig: WorkTimeCalculator.BreakConfig) {
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Text(
-                        text = WorkTimeCalculator.formatDuration(net),
+                        text = if (isValidRange) WorkTimeCalculator.formatDuration(net) else "--:--",
                         fontSize = 48.sp,
                         fontWeight = FontWeight.Light,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
