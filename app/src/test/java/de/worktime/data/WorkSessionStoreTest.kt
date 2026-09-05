@@ -133,6 +133,24 @@ class WorkSessionStoreTest {
     }
 
     @Test
+    fun `entries from an older calendar week are hidden and cleared on write`() = runTest {
+        var today = LocalDate.of(2026, 9, 11)
+        val store = createStore { today }
+        store.updateWeekStart(DayOfWeek.FRIDAY, 8 * 60)
+        store.updateWeekEnd(DayOfWeek.FRIDAY, 16 * 60)
+
+        today = LocalDate.of(2026, 9, 15)
+
+        assertTrue(store.weekEntries.first().values.none { entry -> entry.hasValue })
+
+        store.updateWeekStart(DayOfWeek.TUESDAY, 9 * 60)
+
+        val entries = store.weekEntries.first()
+        assertEquals(9 * 60, entries.getValue(DayOfWeek.TUESDAY).startMinutes)
+        assertFalse(entries.getValue(DayOfWeek.FRIDAY).hasValue)
+    }
+
+    @Test
     fun `weekend entries are rejected without clearing the session`() = runTest {
         val store = createStore()
         store.startSession(123_000L)
@@ -144,12 +162,14 @@ class WorkSessionStoreTest {
         assertTrue(store.session.first().isRunning)
     }
 
-    private fun kotlinx.coroutines.test.TestScope.createStore(): WorkSessionStore {
+    private fun kotlinx.coroutines.test.TestScope.createStore(
+        todayProvider: () -> LocalDate = { LocalDate.now() }
+    ): WorkSessionStore {
         val dataStore = PreferenceDataStoreFactory.create(
             scope = backgroundScope,
             produceFile = { temporaryFolder.newFile("preferences.preferences_pb") }
         )
-        return WorkSessionStore(dataStore)
+        return WorkSessionStore(dataStore, todayProvider)
     }
 
     private suspend fun assertIllegalArgument(block: suspend () -> Unit) {

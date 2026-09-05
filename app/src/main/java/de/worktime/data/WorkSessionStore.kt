@@ -14,11 +14,13 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.temporal.IsoFields
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "work_session")
 
 class WorkSessionStore internal constructor(
-    private val dataStore: DataStore<Preferences>
+    private val dataStore: DataStore<Preferences>,
+    private val todayProvider: () -> LocalDate = { LocalDate.now() }
 ) {
 
     constructor(context: Context) : this(context.dataStore)
@@ -35,6 +37,7 @@ class WorkSessionStore internal constructor(
         private val KEY_NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
         private val KEY_NOTIFICATION_OFFSET_MINUTES = intPreferencesKey("notification_offset_minutes")
         private val KEY_LAST_NOTIFICATION_DATE = stringPreferencesKey("last_notification_date")
+        private val KEY_WEEK_ID = stringPreferencesKey("week_id")
 
         val WORK_DAYS = DayOfWeek.entries.filter { day ->
             day.value in DayOfWeek.MONDAY.value..DayOfWeek.FRIDAY.value
@@ -94,11 +97,16 @@ class WorkSessionStore internal constructor(
     }
 
     val weekEntries: Flow<Map<DayOfWeek, WeekEntry>> = dataStore.data.map { prefs ->
-        WORK_DAYS.associateWith { day ->
-            WeekEntry(
-                startMinutes = prefs[startKey(day)],
-                endMinutes = prefs[endKey(day)]
-            )
+        val storedWeekId = prefs[KEY_WEEK_ID]
+        if (storedWeekId != null && storedWeekId != currentWeekId()) {
+            WORK_DAYS.associateWith { WeekEntry() }
+        } else {
+            WORK_DAYS.associateWith { day ->
+                WeekEntry(
+                    startMinutes = prefs[startKey(day)],
+                    endMinutes = prefs[endKey(day)]
+                )
+            }
         }
     }
 
@@ -187,10 +195,8 @@ class WorkSessionStore internal constructor(
 
     suspend fun resetWeek() {
         dataStore.edit { prefs ->
-            WORK_DAYS.forEach { day ->
-                prefs.remove(startKey(day))
-                prefs.remove(endKey(day))
-            }
+            clearWeekEntries(prefs)
+            prefs[KEY_WEEK_ID] = currentWeekId()
         }
     }
 
@@ -212,11 +218,9 @@ class WorkSessionStore internal constructor(
         requireMinutesSinceMidnight(startMinutes)
         requireMinutesSinceMidnight(endMinutes)
         dataStore.edit { prefs ->
+            rollOverWeekIfNeeded(prefs)
             if (clearWeekBeforeSave) {
-                WORK_DAYS.forEach { weekDay ->
-                    prefs.remove(startKey(weekDay))
-                    prefs.remove(endKey(weekDay))
-                }
+                clearWeekEntries(prefs)
             }
             prefs[startKey(day)] = startMinutes
             prefs[endKey(day)] = endMinutes
@@ -231,9 +235,31 @@ class WorkSessionStore internal constructor(
         requireWorkDay(day)
         minutes?.let(::requireMinutesSinceMidnight)
         dataStore.edit { prefs ->
+            rollOverWeekIfNeeded(prefs)
             val key = if (isStart) startKey(day) else endKey(day)
             if (minutes == null) prefs.remove(key) else prefs[key] = minutes
         }
+    }
+
+    private fun rollOverWeekIfNeeded(prefs: androidx.datastore.preferences.core.MutablePreferences) {
+        val currentWeekId = currentWeekId()
+        val storedWeekId = prefs[KEY_WEEK_ID]
+        if (storedWeekId != null && storedWeekId != currentWeekId) {
+            clearWeekEntries(prefs)
+        }
+        prefs[KEY_WEEK_ID] = currentWeekId
+    }
+
+    private fun clearWeekEntries(prefs: androidx.datastore.preferences.core.MutablePreferences) {
+        WORK_DAYS.forEach { day ->
+            prefs.remove(startKey(day))
+            prefs.remove(endKey(day))
+        }
+    }
+
+    private fun currentWeekId(): String {
+        val today = todayProvider()
+        return "${today.get(IsoFields.WEEK_BASED_YEAR)}-${today.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)}"
     }
 
     private fun requireWorkDay(day: DayOfWeek) {
