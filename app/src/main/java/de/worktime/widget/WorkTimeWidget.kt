@@ -46,6 +46,11 @@ import kotlinx.coroutines.launch
 
 private const val ACTION_TICK = "de.worktime.WIDGET_TICK"
 
+private fun openTimerIntent(context: Context) =
+    Intent(context, MainActivity::class.java)
+        .setAction(MainActivity.ACTION_OPEN_TIMER)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+
 private fun widgetTickPendingIntent(context: Context): PendingIntent {
     val intent = Intent(context, WorkTimeWidgetReceiver::class.java)
         .setAction(ACTION_TICK)
@@ -144,21 +149,15 @@ private fun WidgetContent(
         .background(GlanceTheme.colors.surface)
         .padding(horizontal = 14.dp, vertical = 8.dp)
 
-    // Beim Tippen auf das laufende Widget → App öffnen
     val context = LocalContext.current
-    val rowModifier = if (isRunning)
-        baseModifier.clickable(actionStartActivity(
-            Intent(context, MainActivity::class.java)
-                .setAction(MainActivity.ACTION_OPEN_TIMER)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        ))
-    else
-        baseModifier
+    val rowModifier = baseModifier.clickable(
+        actionStartActivity(openTimerIntent(context))
+    )
 
     if (session == null) {
         // Still loading: show neutral placeholder so Start button never flashes
         Row(
-            modifier = baseModifier,
+            modifier = rowModifier,
             verticalAlignment = Alignment.CenterVertically,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -174,7 +173,7 @@ private fun WidgetContent(
     } else if (!isRunning) {
         // Nicht gestartet: nur Start-Button zentriert
         Row(
-            modifier = baseModifier,
+            modifier = rowModifier,
             verticalAlignment = Alignment.CenterVertically,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -225,6 +224,7 @@ class StartSessionAction : ActionCallback {
         scheduleWidgetTick(context, startTimeMillis)
         scheduleTargetNotification(context, startTimeMillis, settings)
         WorkTimeWidget().updateAll(context)
+        context.startActivity(openTimerIntent(context))
     }
 
     private fun scheduleMidnightAlarm(context: Context) {
