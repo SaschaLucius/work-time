@@ -57,8 +57,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     cancelTargetNotification(getApplication())
                     return@collect
                 }
-                // Extern gestartete Session aufnehmen (z. B. vom Widget)
-                if (session.isRunning && session.startTimeMillis > 0 && !_state.value.isRunning) {
+                val currentState = _state.value
+                if (session.isRunning && session.startTimeMillis > 0 &&
+                    (!currentState.isRunning || currentState.startTimeMillis != session.startTimeMillis)
+                ) {
+                    // Extern gestartete Session aufnehmen (z. B. vom Widget)
                     _state.update { it.copy(isRunning = true, startTimeMillis = session.startTimeMillis) }
                     startTicker(session.startTimeMillis)
                     // Alarme können durch App-Update/Force-Stop verloren gehen → neu planen
@@ -69,11 +72,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         session.startTimeMillis,
                         _state.value.settings
                     )
-                }
-                // Gestoppte Session beim App-Start wiederherstellen
-                if (!session.isRunning && session.startTimeMillis > 0 && _state.value.startTimeMillis <= 0) {
+                } else if (!session.isRunning && session.startTimeMillis > 0 &&
+                    (currentState.isRunning || currentState.startTimeMillis != session.startTimeMillis)
+                ) {
+                    // Gestoppte Session beim App-Start oder nach externer Änderung übernehmen
+                    tickJob?.cancel()
+                    cancelMidnightReset()
+                    cancelWidgetTick(getApplication())
+                    cancelTargetNotification(getApplication())
                     recalculate(session.startTimeMillis)
-                    _state.update { it.copy(startTimeMillis = session.startTimeMillis) }
+                    _state.update {
+                        it.copy(isRunning = false, startTimeMillis = session.startTimeMillis)
+                    }
+                } else if (!session.isRunning && session.startTimeMillis <= 0 &&
+                    (currentState.isRunning || currentState.startTimeMillis > 0)
+                ) {
+                    // Persistierter Reset (z. B. Mitternacht) muss auch die laufende UI stoppen
+                    tickJob?.cancel()
+                    cancelMidnightReset()
+                    cancelWidgetTick(getApplication())
+                    cancelTargetNotification(getApplication())
+                    _state.update {
+                        TimerUiState(settings = it.settings, weekEntries = it.weekEntries)
+                    }
                 }
             }
         }
