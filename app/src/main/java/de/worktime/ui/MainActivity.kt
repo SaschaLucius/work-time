@@ -17,6 +17,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -31,15 +32,29 @@ import de.worktime.ui.settings.SettingsScreen
 import de.worktime.ui.theme.ArbeitsTheme
 import de.worktime.ui.timer.TimerScreen
 import de.worktime.ui.woche.WochensaldoScreen
+import kotlinx.coroutines.flow.MutableSharedFlow
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        const val ACTION_OPEN_TIMER = "de.worktime.OPEN_TIMER"
+    }
+
+    private val openTimerRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             ArbeitsTheme {
-                ArbeitsApp()
+                ArbeitsApp(openTimerRequests)
             }
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        if (intent.action == ACTION_OPEN_TIMER) {
+            openTimerRequests.tryEmit(Unit)
         }
     }
 }
@@ -47,10 +62,19 @@ class MainActivity : ComponentActivity() {
 private data class NavTab(val route: String, val label: String, val icon: @Composable () -> Unit)
 
 @Composable
-private fun ArbeitsApp() {
+private fun ArbeitsApp(openTimerRequests: kotlinx.coroutines.flow.Flow<Unit>) {
     val navController = rememberNavController()
     val viewModel: MainViewModel = viewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(navController) {
+        openTimerRequests.collect {
+            navController.navigate("timer") {
+                popUpTo(navController.graph.findStartDestination().id)
+                launchSingleTop = true
+            }
+        }
+    }
 
     val tabs = listOf(
         NavTab("timer", "Timer") { Icon(Icons.Default.Timer, contentDescription = "Timer") },

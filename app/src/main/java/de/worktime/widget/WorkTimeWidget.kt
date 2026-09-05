@@ -149,6 +149,7 @@ private fun WidgetContent(
     val rowModifier = if (isRunning)
         baseModifier.clickable(actionStartActivity(
             Intent(context, MainActivity::class.java)
+                .setAction(MainActivity.ACTION_OPEN_TIMER)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         ))
     else
