@@ -194,6 +194,14 @@ class WorkSessionStore internal constructor(
         }
     }
 
+    suspend fun resetWeekDay(day: DayOfWeek) {
+        requireWorkDay(day)
+        dataStore.edit { prefs ->
+            prefs.remove(startKey(day))
+            prefs.remove(endKey(day))
+        }
+    }
+
     suspend fun saveDayAndResetSession(
         day: DayOfWeek,
         startMinutes: Int,

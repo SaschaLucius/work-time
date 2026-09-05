@@ -124,6 +124,7 @@ private fun ArbeitsApp(openTimerRequests: kotlinx.coroutines.flow.Flow<Unit>) {
                     breakConfig = state.settings.breakConfig,
                     onStartChange = viewModel::updateWeekStart,
                     onEndChange = viewModel::updateWeekEnd,
+                    onResetDay = viewModel::resetWeekDay,
                     onResetWeek = viewModel::resetWeek
                 )
             }

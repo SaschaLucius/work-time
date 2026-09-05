@@ -187,6 +187,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { store.resetWeek() }
     }
 
+    fun resetWeekDay(day: DayOfWeek) {
+        viewModelScope.launch { store.resetWeekDay(day) }
+    }
+
     fun endDay() {
         val currentState = _state.value
         val day = LocalDate.now().dayOfWeek

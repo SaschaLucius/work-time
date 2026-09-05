@@ -84,6 +84,20 @@ class WorkSessionStoreTest {
     }
 
     @Test
+    fun `resetting one weekday keeps the other entries`() = runTest {
+        val store = createStore()
+        store.updateWeekStart(DayOfWeek.MONDAY, 8 * 60)
+        store.updateWeekEnd(DayOfWeek.MONDAY, 17 * 60)
+        store.updateWeekStart(DayOfWeek.TUESDAY, 9 * 60)
+
+        store.resetWeekDay(DayOfWeek.MONDAY)
+
+        val entries = store.weekEntries.first()
+        assertFalse(entries.getValue(DayOfWeek.MONDAY).hasValue)
+        assertEquals(9 * 60, entries.getValue(DayOfWeek.TUESDAY).startMinutes)
+    }
+
+    @Test
     fun `saving a day and resetting the active session is atomic`() = runTest {
         val store = createStore()
         store.startSession(123_000L)
