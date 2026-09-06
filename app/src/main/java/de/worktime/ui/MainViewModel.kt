@@ -192,6 +192,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { store.updateNotificationsEnabled(enabled) }
     }
 
+    fun updateShowWeekends(enabled: Boolean) {
+        viewModelScope.launch { store.updateShowWeekends(enabled) }
+    }
+
     fun updateNotificationOffset(minutes: Int) {
         viewModelScope.launch { store.updateNotificationOffset(minutes) }
     }
@@ -215,9 +219,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun endDay(clearWeekBeforeSave: Boolean = false) {
         val currentState = _state.value
         val day = LocalDate.now().dayOfWeek
-        if (!currentState.isRunning || currentState.startTimeMillis <= 0 ||
-            day !in WorkSessionStore.WORK_DAYS
-        ) return
+        if (!currentState.isRunning || currentState.startTimeMillis <= 0) return
 
         val endTimeMillis = (System.currentTimeMillis() / 60_000) * 60_000
         val startTime = Instant.ofEpochMilli(currentState.startTimeMillis)

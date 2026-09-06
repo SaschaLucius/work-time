@@ -42,7 +42,8 @@ fun SettingsScreen(
     onBreakMinutesChange: (first: Int, second: Int) -> Unit,
     onDailyTargetChange: (minutes: Int) -> Unit,
     onNotificationsEnabledChange: (Boolean) -> Unit,
-    onNotificationOffsetChange: (Int) -> Unit
+    onNotificationOffsetChange: (Int) -> Unit,
+    onShowWeekendsChange: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
     var permissionDenied by rememberSaveable { mutableStateOf(false) }
@@ -122,6 +123,25 @@ fun SettingsScreen(
                     )
                 }
             )
+        }
+
+        HorizontalDivider()
+
+        SettingsSection(title = "Wochenübersicht") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Wochenende immer anzeigen",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f)
+                )
+                Switch(
+                    checked = settings.showWeekends,
+                    onCheckedChange = onShowWeekendsChange
+                )
+            }
         }
 
         HorizontalDivider()

@@ -37,11 +37,10 @@ class WorkSessionStore internal constructor(
         private val KEY_NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
         private val KEY_NOTIFICATION_OFFSET_MINUTES = intPreferencesKey("notification_offset_minutes")
         private val KEY_LAST_NOTIFICATION_DATE = stringPreferencesKey("last_notification_date")
+        private val KEY_SHOW_WEEKENDS = booleanPreferencesKey("show_weekends")
         private val KEY_WEEK_ID = stringPreferencesKey("week_id")
 
-        val WORK_DAYS = DayOfWeek.entries.filter { day ->
-            day.value in DayOfWeek.MONDAY.value..DayOfWeek.FRIDAY.value
-        }
+        val WORK_DAYS = DayOfWeek.entries
 
         private fun startKey(day: DayOfWeek) =
             intPreferencesKey("${day.name.lowercase()}_start_minutes")
@@ -63,7 +62,8 @@ class WorkSessionStore internal constructor(
         val dailyTargetMinutes: Int = 8 * 60,
         val notificationsEnabled: Boolean = false,
         val notificationOffsetMinutes: Int = 0,
-        val lastNotificationDate: String = ""
+        val lastNotificationDate: String = "",
+        val showWeekends: Boolean = false
     ) {
         val breakConfig: WorkTimeCalculator.BreakConfig
             get() = WorkTimeCalculator.BreakConfig(firstBreakMinutes, secondBreakMinutes)
@@ -92,7 +92,8 @@ class WorkSessionStore internal constructor(
             dailyTargetMinutes = prefs[KEY_DAILY_TARGET_MINUTES] ?: 8 * 60,
             notificationsEnabled = prefs[KEY_NOTIFICATIONS_ENABLED] ?: false,
             notificationOffsetMinutes = prefs[KEY_NOTIFICATION_OFFSET_MINUTES] ?: 0,
-            lastNotificationDate = prefs[KEY_LAST_NOTIFICATION_DATE] ?: ""
+            lastNotificationDate = prefs[KEY_LAST_NOTIFICATION_DATE] ?: "",
+            showWeekends = prefs[KEY_SHOW_WEEKENDS] ?: false
         )
     }
 
@@ -170,6 +171,10 @@ class WorkSessionStore internal constructor(
 
     suspend fun updateNotificationsEnabled(enabled: Boolean) {
         dataStore.edit { prefs -> prefs[KEY_NOTIFICATIONS_ENABLED] = enabled }
+    }
+
+    suspend fun updateShowWeekends(enabled: Boolean) {
+        dataStore.edit { prefs -> prefs[KEY_SHOW_WEEKENDS] = enabled }
     }
 
     suspend fun updateNotificationOffset(minutes: Int) {
@@ -270,7 +275,7 @@ class WorkSessionStore internal constructor(
     }
 
     private fun requireWorkDay(day: DayOfWeek) {
-        require(day in WORK_DAYS) { "Weekly calculator supports Monday through Friday" }
+        require(day in WORK_DAYS) { "Weekly calculator does not support this day" }
     }
 
     private fun requireMinutesSinceMidnight(minutes: Int) {

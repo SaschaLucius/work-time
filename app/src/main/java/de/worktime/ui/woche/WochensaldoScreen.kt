@@ -42,21 +42,38 @@ import java.time.DayOfWeek
 fun WochensaldoScreen(
     entries: Map<DayOfWeek, WorkSessionStore.WeekEntry>,
     breakConfig: WorkTimeCalculator.BreakConfig,
+    showWeekends: Boolean,
     onStartChange: (DayOfWeek, Int) -> Unit,
     onEndChange: (DayOfWeek, Int) -> Unit,
     onResetDay: (DayOfWeek) -> Unit,
     onResetWeek: () -> Unit
 ) {
-    val workDays = WorkSessionStore.WORK_DAYS
-    val dayLabels = listOf("Mo", "Di", "Mi", "Do", "Fr")
+    val workDays = WorkSessionStore.WORK_DAYS.take(5)
+    val weekendDays = WorkSessionStore.WORK_DAYS.drop(5)
+    val visibleDays = if (
+        showWeekends || weekendDays.any { day -> entries[day]?.hasValue == true }
+    ) {
+        workDays + weekendDays
+    } else {
+        workDays
+    }
+    val dayLabels = mapOf(
+        DayOfWeek.MONDAY to "Mo",
+        DayOfWeek.TUESDAY to "Di",
+        DayOfWeek.WEDNESDAY to "Mi",
+        DayOfWeek.THURSDAY to "Do",
+        DayOfWeek.FRIDAY to "Fr",
+        DayOfWeek.SATURDAY to "Sa",
+        DayOfWeek.SUNDAY to "So"
+    )
 
     // which picker is open: Pair(dayIndex, isStart)
     var activePicker by rememberSaveable { mutableStateOf<Pair<Int, Boolean>?>(null) }
     var showResetDialog by rememberSaveable { mutableStateOf(false) }
     var invalidTimeRange by rememberSaveable { mutableStateOf(false) }
 
-    val netMinutesPerDay: List<Int?> = (0..4).map { i ->
-        val entry = entries[workDays[i]] ?: WorkSessionStore.WeekEntry()
+    val netMinutesPerDay = visibleDays.associateWith { day ->
+        val entry = entries[day] ?: WorkSessionStore.WeekEntry()
         val start = entry.startMinutes
         val end = entry.endMinutes
         if (start != null && end != null) {
@@ -65,8 +82,8 @@ fun WochensaldoScreen(
         } else null
     }
 
-    val totalMinutes = netMinutesPerDay.filterNotNull().sum()
-    val filledDays = netMinutesPerDay.count { it != null }
+    val totalMinutes = netMinutesPerDay.values.filterNotNull().sum()
+    val filledDays = netMinutesPerDay.values.count { it != null }
 
     Column(
         modifier = Modifier
@@ -88,18 +105,18 @@ fun WochensaldoScreen(
 
         Spacer(Modifier.height(24.dp))
 
-        workDays.forEachIndexed { i, day ->
+        visibleDays.forEachIndexed { i, day ->
             val entry = entries[day] ?: WorkSessionStore.WeekEntry()
             TagZeile(
-                label = dayLabels[i],
+            label = dayLabels.getValue(day),
                 startMinutes = entry.startMinutes,
                 endMinutes = entry.endMinutes,
-                netMinutes = netMinutesPerDay[i],
+                netMinutes = netMinutesPerDay[day],
                 onStartClick = { activePicker = Pair(i, true) },
                 onEndClick = { activePicker = Pair(i, false) },
                 onResetClick = { onResetDay(day) }
             )
-            if (i < 4) {
+            if (i < visibleDays.lastIndex) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             }
         }
@@ -145,10 +162,10 @@ fun WochensaldoScreen(
 
     // Time picker dialog
     activePicker?.let { (dayIndex, isStart) ->
-        val day = workDays[dayIndex]
+        val day = visibleDays[dayIndex]
         val entry = entries[day] ?: WorkSessionStore.WeekEntry()
         val current = if (isStart) entry.startMinutes else entry.endMinutes
-        val dayLabel = dayLabels[dayIndex]
+        val dayLabel = dayLabels.getValue(day)
         val pickerTitle = if (isStart) "Start $dayLabel" else "Ende $dayLabel"
 
         ZeitPickerDialog(
@@ -181,7 +198,7 @@ fun WochensaldoScreen(
         AlertDialog(
             onDismissRequest = { showResetDialog = false },
             title = { Text("Woche zurücksetzen?") },
-            text = { Text("Alle Start- und Endzeiten von Montag bis Freitag werden gelöscht.") },
+            text = { Text("Alle Start- und Endzeiten dieser Woche werden gelöscht.") },
             confirmButton = {
                 TextButton(
                     onClick = {

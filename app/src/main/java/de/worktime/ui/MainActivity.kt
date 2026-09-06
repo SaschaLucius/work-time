@@ -122,6 +122,7 @@ private fun ArbeitsApp(openTimerRequests: kotlinx.coroutines.flow.Flow<Unit>) {
                 WochensaldoScreen(
                     entries = state.weekEntries,
                     breakConfig = state.settings.breakConfig,
+                    showWeekends = state.settings.showWeekends,
                     onStartChange = viewModel::updateWeekStart,
                     onEndChange = viewModel::updateWeekEnd,
                     onResetDay = viewModel::resetWeekDay,
@@ -134,7 +135,8 @@ private fun ArbeitsApp(openTimerRequests: kotlinx.coroutines.flow.Flow<Unit>) {
                     onBreakMinutesChange = viewModel::updateBreakMinutes,
                     onDailyTargetChange = viewModel::updateDailyTarget,
                     onNotificationsEnabledChange = viewModel::updateNotificationsEnabled,
-                    onNotificationOffsetChange = viewModel::updateNotificationOffset
+                    onNotificationOffsetChange = viewModel::updateNotificationOffset,
+                    onShowWeekendsChange = viewModel::updateShowWeekends
                 )
             }
         }

@@ -32,6 +32,7 @@ class WorkSessionStoreTest {
         store.updateNotificationsEnabled(true)
         store.updateNotificationOffset(15)
         store.markNotificationShown(LocalDate.of(2026, 9, 1))
+        store.updateShowWeekends(true)
 
         assertEquals(
             WorkSessionStore.AppSettings(
@@ -40,7 +41,8 @@ class WorkSessionStoreTest {
                 dailyTargetMinutes = 7 * 60,
                 notificationsEnabled = true,
                 notificationOffsetMinutes = 15,
-                lastNotificationDate = "2026-09-01"
+                lastNotificationDate = "2026-09-01",
+                showWeekends = true
             ),
             store.settings.first()
         )
@@ -151,15 +153,22 @@ class WorkSessionStoreTest {
     }
 
     @Test
-    fun `weekend entries are rejected without clearing the session`() = runTest {
+    fun `weekend entries persist and reset with the week`() = runTest {
         val store = createStore()
         store.startSession(123_000L)
 
-        assertIllegalArgument {
-            store.saveDayAndResetSession(DayOfWeek.SATURDAY, 8 * 60, 17 * 60)
-        }
+        store.saveDayAndResetSession(DayOfWeek.SATURDAY, 8 * 60, 17 * 60)
 
-        assertTrue(store.session.first().isRunning)
+        val saturday = store.weekEntries.first().getValue(DayOfWeek.SATURDAY)
+        assertEquals(8 * 60, saturday.startMinutes)
+        assertEquals(17 * 60, saturday.endMinutes)
+        assertFalse(store.session.first().isRunning)
+
+        store.updateWeekStart(DayOfWeek.SUNDAY, 9 * 60)
+        store.resetWeek()
+
+        assertFalse(store.weekEntries.first().getValue(DayOfWeek.SATURDAY).hasValue)
+        assertFalse(store.weekEntries.first().getValue(DayOfWeek.SUNDAY).hasValue)
     }
 
     @Test

@@ -29,7 +29,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import de.worktime.domain.WorkTimeCalculator
-import de.worktime.data.WorkSessionStore
 import de.worktime.ui.MainViewModel
 import de.worktime.ui.TimerUiState
 import de.worktime.ui.common.ZeitPickerDialog
@@ -44,7 +43,6 @@ fun TimerScreen(viewModel: MainViewModel) {
     var showEndDayDialog by rememberSaveable { mutableStateOf(false) }
     var startTimeError by rememberSaveable { mutableStateOf(false) }
     val currentDay = LocalDate.now().dayOfWeek
-    val isWorkDay = currentDay in WorkSessionStore.WORK_DAYS
 
     Column(
         modifier = Modifier
@@ -113,7 +111,6 @@ fun TimerScreen(viewModel: MainViewModel) {
             onClick = {
                 if (state.isRunning) showEndDayDialog = true else viewModel.start()
             },
-            enabled = !state.isRunning || isWorkDay,
             modifier = Modifier
                 .fillMaxWidth(0.55f)
                 .height(52.dp)
@@ -121,15 +118,6 @@ fun TimerScreen(viewModel: MainViewModel) {
             Text(
                 text = if (state.isRunning) "Tag beenden" else "Start",
                 style = MaterialTheme.typography.titleMedium
-            )
-        }
-
-        if (!isWorkDay) {
-            Text(
-                text = "Tag beenden ist nur Montag bis Freitag möglich.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp)
             )
         }
 
