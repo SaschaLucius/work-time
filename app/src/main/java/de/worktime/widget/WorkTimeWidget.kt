@@ -224,7 +224,6 @@ class StartSessionAction : ActionCallback {
         scheduleWidgetTick(context, startTimeMillis)
         scheduleTargetNotification(context, startTimeMillis, settings)
         WorkTimeWidget().updateAll(context)
-        context.startActivity(openTimerIntent(context))
     }
 
     private fun scheduleMidnightAlarm(context: Context) {
