@@ -1,5 +1,6 @@
 package de.worktime.ui.woche
 
+import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,10 +31,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.worktime.data.WorkSessionStore
+import de.worktime.data.netMinutes
 import de.worktime.domain.WorkTimeCalculator
 import de.worktime.ui.common.ZeitPickerDialog
 import java.time.DayOfWeek
@@ -43,11 +47,13 @@ fun WochensaldoScreen(
     entries: Map<DayOfWeek, WorkSessionStore.WeekEntry>,
     breakConfig: WorkTimeCalculator.BreakConfig,
     showWeekends: Boolean,
+    weeklyTargetMinutes: Int,
     onStartChange: (DayOfWeek, Int) -> Unit,
     onEndChange: (DayOfWeek, Int) -> Unit,
     onResetDay: (DayOfWeek) -> Unit,
     onResetWeek: () -> Unit
 ) {
+    val context = LocalContext.current
     val workDays = WorkSessionStore.WORK_DAYS.take(5)
     val weekendDays = WorkSessionStore.WORK_DAYS.drop(5)
     val visibleDays = if (
@@ -74,15 +80,11 @@ fun WochensaldoScreen(
 
     val netMinutesPerDay = visibleDays.associateWith { day ->
         val entry = entries[day] ?: WorkSessionStore.WeekEntry()
-        val start = entry.startMinutes
-        val end = entry.endMinutes
-        if (start != null && end != null) {
-            val gross = end - start
-            WorkTimeCalculator.calculateNetMinutes(gross.coerceAtLeast(0), breakConfig)
-        } else null
+        entry.netMinutes(breakConfig)
     }
 
     val totalMinutes = netMinutesPerDay.values.filterNotNull().sum()
+    val balanceMinutes = totalMinutes - weeklyTargetMinutes
     val filledDays = netMinutesPerDay.values.count { it != null }
 
     Column(
@@ -92,16 +94,41 @@ fun WochensaldoScreen(
             .padding(horizontal = 16.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
-        Text(
-            text = "Wochensaldo",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Text(
-            text = "Start- und Endzeit pro Tag eingeben",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Wochensaldo",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Start- und Endzeit pro Tag eingeben",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(
+                onClick = {
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_SUBJECT, buildWeekShareSubject())
+                        putExtra(
+                            Intent.EXTRA_TEXT,
+                            buildWeekShareText(entries, breakConfig, weeklyTargetMinutes)
+                        )
+                    }
+                    context.startActivity(
+                        Intent.createChooser(shareIntent, "Wochenübersicht teilen")
+                    )
+                },
+                enabled = entries.values.any { entry -> entry.hasValue }
+            ) {
+                Icon(Icons.Default.Share, contentDescription = "Wochenübersicht teilen")
+            }
+        }
 
         Spacer(Modifier.height(24.dp))
 
@@ -155,6 +182,17 @@ fun WochensaldoScreen(
                     fontWeight = FontWeight.Light,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                     lineHeight = 52.sp
+                )
+                Spacer(Modifier.height(8.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f))
+                Spacer(Modifier.height(4.dp))
+                SummaryRow(
+                    label = "Wochenziel",
+                    value = WorkTimeCalculator.formatDuration(weeklyTargetMinutes)
+                )
+                SummaryRow(
+                    label = "Saldo",
+                    value = if (filledDays > 0) formatSignedDuration(balanceMinutes) else "--:--"
                 )
             }
         }
@@ -227,6 +265,24 @@ fun WochensaldoScreen(
                     Text("OK")
                 }
             }
+        )
+    }
+}
+
+@Composable
+private fun SummaryRow(label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.onPrimaryContainer
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onPrimaryContainer
         )
     }
 }

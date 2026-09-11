@@ -41,6 +41,7 @@ fun SettingsScreen(
     settings: WorkSessionStore.AppSettings,
     onBreakMinutesChange: (first: Int, second: Int) -> Unit,
     onDailyTargetChange: (minutes: Int) -> Unit,
+    onWeeklyTargetChange: (minutes: Int) -> Unit,
     onNotificationsEnabledChange: (Boolean) -> Unit,
     onNotificationOffsetChange: (Int) -> Unit,
     onShowWeekendsChange: (Boolean) -> Unit
@@ -128,6 +129,22 @@ fun SettingsScreen(
         HorizontalDivider()
 
         SettingsSection(title = "Wochenübersicht") {
+            StepperRow(
+                label = "Wochenziel",
+                value = WorkTimeCalculator.formatDuration(settings.weeklyTargetMinutes),
+                canDecrease = settings.weeklyTargetMinutes > 15,
+                canIncrease = settings.weeklyTargetMinutes <
+                    WorkSessionStore.MAX_WEEKLY_TARGET_MINUTES,
+                onDecrease = {
+                    onWeeklyTargetChange((settings.weeklyTargetMinutes - 15).coerceAtLeast(15))
+                },
+                onIncrease = {
+                    onWeeklyTargetChange(
+                        (settings.weeklyTargetMinutes + 15)
+                            .coerceAtMost(WorkSessionStore.MAX_WEEKLY_TARGET_MINUTES)
+                    )
+                }
+            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -152,7 +169,7 @@ fun SettingsScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Beim Tagesziel erinnern",
+                    text = "Beim Tages- oder Wochenziel erinnern",
                     style = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier.weight(1f)
                 )
@@ -177,7 +194,7 @@ fun SettingsScreen(
                 )
             }
             StepperRow(
-                label = "Früher erinnern",
+                label = "Tagesziel früher erinnern",
                 value = "${settings.notificationOffsetMinutes} Min.",
                 canDecrease = settings.notificationOffsetMinutes > 0,
                 canIncrease = settings.notificationOffsetMinutes + 5 <=

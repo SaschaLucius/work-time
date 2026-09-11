@@ -14,26 +14,47 @@ private const val TARGET_NOTIFICATION_REQUEST_CODE = 2
 fun targetNotificationTriggerMillis(
     startTimeMillis: Long,
     settings: WorkSessionStore.AppSettings,
-    today: LocalDate = LocalDate.now()
+    today: LocalDate = LocalDate.now(),
+    completedWeekMinutes: Int = 0
 ): Long? {
-    if (!settings.notificationsEnabled || settings.lastNotificationDate == today.toString()) {
-        return null
-    }
-    val targetNetMinutes =
-        (settings.dailyTargetMinutes - settings.notificationOffsetMinutes).coerceAtLeast(0)
-    val grossMinutes = WorkTimeCalculator.grossMinutesToReachNetTarget(
-        targetNetMinutes,
-        settings.breakConfig
-    )
-    return startTimeMillis + grossMinutes * 60_000L
+    if (!settings.notificationsEnabled) return null
+
+    val dailyTrigger = if (settings.lastNotificationDate != today.toString()) {
+        val targetNetMinutes =
+            (settings.dailyTargetMinutes - settings.notificationOffsetMinutes).coerceAtLeast(0)
+        val grossMinutes = WorkTimeCalculator.grossMinutesToReachNetTarget(
+            targetNetMinutes,
+            settings.breakConfig
+        )
+        startTimeMillis + grossMinutes * 60_000L
+    } else null
+
+    val weeklyTrigger = if (
+        settings.lastWeeklyNotification != WorkSessionStore.weekId(today)
+    ) {
+        val remainingNetMinutes =
+            (settings.weeklyTargetMinutes - completedWeekMinutes).coerceAtLeast(0)
+        val grossMinutes = WorkTimeCalculator.grossMinutesToReachNetTarget(
+            remainingNetMinutes,
+            settings.breakConfig
+        )
+        startTimeMillis + grossMinutes * 60_000L
+    } else null
+
+    return listOfNotNull(dailyTrigger, weeklyTrigger).minOrNull()
 }
 
 fun scheduleTargetNotification(
     context: Context,
     startTimeMillis: Long,
-    settings: WorkSessionStore.AppSettings
+    settings: WorkSessionStore.AppSettings,
+    completedWeekMinutes: Int = 0
 ) {
-    val triggerMillis = targetNotificationTriggerMillis(startTimeMillis, settings)
+    val triggerMillis = targetNotificationTriggerMillis(
+        startTimeMillis,
+        settings,
+        completedWeekMinutes = completedWeekMinutes
+    )
     if (triggerMillis == null || startTimeMillis <= 0) {
         cancelTargetNotification(context)
         return

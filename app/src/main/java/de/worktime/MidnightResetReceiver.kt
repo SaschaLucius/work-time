@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.glance.appwidget.updateAll
 import de.worktime.data.WorkSessionStore
+import de.worktime.data.totalNetMinutes
 import de.worktime.widget.WorkTimeWidget
 import de.worktime.widget.scheduleWidgetTick
 import kotlinx.coroutines.CoroutineScope
@@ -54,7 +55,16 @@ class MidnightResetReceiver : BroadcastReceiver() {
             session.isRunning -> {
                 scheduleNextMidnightAlarm(context)
                 scheduleWidgetTick(context, session.startTimeMillis)
-                scheduleTargetNotification(context, session.startTimeMillis, settings)
+                val completedWeekMinutes = store.weekEntries.first().totalNetMinutes(
+                    settings.breakConfig,
+                    excluding = LocalDate.now().dayOfWeek
+                )
+                scheduleTargetNotification(
+                    context,
+                    session.startTimeMillis,
+                    settings,
+                    completedWeekMinutes
+                )
             }
             else -> cancelTargetNotification(context)
         }

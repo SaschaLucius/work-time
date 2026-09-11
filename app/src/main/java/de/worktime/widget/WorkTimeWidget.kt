@@ -35,6 +35,7 @@ import androidx.glance.text.TextStyle
 import de.worktime.MidnightResetReceiver
 import de.worktime.scheduleTargetNotification
 import de.worktime.data.WorkSessionStore
+import de.worktime.data.totalNetMinutes
 import de.worktime.domain.WorkTimeCalculator
 import de.worktime.ui.MainActivity
 import java.time.LocalDate
@@ -218,11 +219,16 @@ class StartSessionAction : ActionCallback {
         parameters: ActionParameters
     ) {
         val startTimeMillis = (System.currentTimeMillis() / 60_000) * 60_000
-        WorkSessionStore(context).startSession(startTimeMillis)
-        val settings = WorkSessionStore(context).settings.first()
+        val store = WorkSessionStore(context)
+        store.startSession(startTimeMillis)
+        val settings = store.settings.first()
+        val completedWeekMinutes = store.weekEntries.first().totalNetMinutes(
+            settings.breakConfig,
+            excluding = LocalDate.now().dayOfWeek
+        )
         scheduleMidnightAlarm(context)
         scheduleWidgetTick(context, startTimeMillis)
-        scheduleTargetNotification(context, startTimeMillis, settings)
+        scheduleTargetNotification(context, startTimeMillis, settings, completedWeekMinutes)
         WorkTimeWidget().updateAll(context)
     }
 

@@ -34,13 +34,21 @@ class WorkSessionStore internal constructor(
         private val KEY_FIRST_BREAK_MINUTES = intPreferencesKey("first_break_minutes")
         private val KEY_SECOND_BREAK_MINUTES = intPreferencesKey("second_break_minutes")
         private val KEY_DAILY_TARGET_MINUTES = intPreferencesKey("daily_target_minutes")
+        private val KEY_WEEKLY_TARGET_MINUTES = intPreferencesKey("weekly_target_minutes")
         private val KEY_NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
         private val KEY_NOTIFICATION_OFFSET_MINUTES = intPreferencesKey("notification_offset_minutes")
         private val KEY_LAST_NOTIFICATION_DATE = stringPreferencesKey("last_notification_date")
+        private val KEY_LAST_WEEKLY_NOTIFICATION = stringPreferencesKey("last_weekly_notification")
         private val KEY_SHOW_WEEKENDS = booleanPreferencesKey("show_weekends")
         private val KEY_WEEK_ID = stringPreferencesKey("week_id")
 
+        const val DEFAULT_WEEKLY_TARGET_MINUTES = 39 * 60
+        const val MAX_WEEKLY_TARGET_MINUTES = 7 * WorkTimeCalculator.MAX_NET_MINUTES
+
         val WORK_DAYS = DayOfWeek.entries
+
+        fun weekId(date: LocalDate): String =
+            "${date.get(IsoFields.WEEK_BASED_YEAR)}-${date.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)}"
 
         private fun startKey(day: DayOfWeek) =
             intPreferencesKey("${day.name.lowercase()}_start_minutes")
@@ -60,9 +68,11 @@ class WorkSessionStore internal constructor(
         val firstBreakMinutes: Int = 30,
         val secondBreakMinutes: Int = 45,
         val dailyTargetMinutes: Int = 8 * 60,
+        val weeklyTargetMinutes: Int = DEFAULT_WEEKLY_TARGET_MINUTES,
         val notificationsEnabled: Boolean = false,
         val notificationOffsetMinutes: Int = 0,
         val lastNotificationDate: String = "",
+        val lastWeeklyNotification: String = "",
         val showWeekends: Boolean = false
     ) {
         val breakConfig: WorkTimeCalculator.BreakConfig
@@ -90,9 +100,11 @@ class WorkSessionStore internal constructor(
             firstBreakMinutes = prefs[KEY_FIRST_BREAK_MINUTES] ?: 30,
             secondBreakMinutes = prefs[KEY_SECOND_BREAK_MINUTES] ?: 45,
             dailyTargetMinutes = prefs[KEY_DAILY_TARGET_MINUTES] ?: 8 * 60,
+            weeklyTargetMinutes = prefs[KEY_WEEKLY_TARGET_MINUTES] ?: DEFAULT_WEEKLY_TARGET_MINUTES,
             notificationsEnabled = prefs[KEY_NOTIFICATIONS_ENABLED] ?: false,
             notificationOffsetMinutes = prefs[KEY_NOTIFICATION_OFFSET_MINUTES] ?: 0,
             lastNotificationDate = prefs[KEY_LAST_NOTIFICATION_DATE] ?: "",
+            lastWeeklyNotification = prefs[KEY_LAST_WEEKLY_NOTIFICATION] ?: "",
             showWeekends = prefs[KEY_SHOW_WEEKENDS] ?: false
         )
     }
@@ -169,6 +181,13 @@ class WorkSessionStore internal constructor(
         }
     }
 
+    suspend fun updateWeeklyTarget(minutes: Int) {
+        require(minutes in 15..MAX_WEEKLY_TARGET_MINUTES) {
+            "Weekly target must be between 15 and $MAX_WEEKLY_TARGET_MINUTES minutes"
+        }
+        dataStore.edit { prefs -> prefs[KEY_WEEKLY_TARGET_MINUTES] = minutes }
+    }
+
     suspend fun updateNotificationsEnabled(enabled: Boolean) {
         dataStore.edit { prefs -> prefs[KEY_NOTIFICATIONS_ENABLED] = enabled }
     }
@@ -188,6 +207,10 @@ class WorkSessionStore internal constructor(
 
     suspend fun markNotificationShown(date: LocalDate) {
         dataStore.edit { prefs -> prefs[KEY_LAST_NOTIFICATION_DATE] = date.toString() }
+    }
+
+    suspend fun markWeeklyNotificationShown(date: LocalDate) {
+        dataStore.edit { prefs -> prefs[KEY_LAST_WEEKLY_NOTIFICATION] = weekId(date) }
     }
 
     suspend fun updateWeekStart(day: DayOfWeek, minutes: Int?) {
@@ -270,8 +293,7 @@ class WorkSessionStore internal constructor(
     }
 
     private fun currentWeekId(): String {
-        val today = todayProvider()
-        return "${today.get(IsoFields.WEEK_BASED_YEAR)}-${today.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)}"
+        return weekId(todayProvider())
     }
 
     private fun requireWorkDay(day: DayOfWeek) {

@@ -13,6 +13,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import de.worktime.data.WorkSessionStore
+import de.worktime.data.totalNetMinutes
 import de.worktime.domain.WorkTimeCalculator
 import de.worktime.ui.MainActivity
 import java.time.LocalDate
@@ -38,10 +39,9 @@ class TargetNotificationReceiver : BroadcastReceiver() {
         val store = WorkSessionStore(context)
         val session = store.session.first()
         val settings = store.settings.first()
+        val entries = store.weekEntries.first()
         val today = LocalDate.now()
-        if (!session.isRunning || session.startTimeMillis <= 0 ||
-            !settings.notificationsEnabled || settings.lastNotificationDate == today.toString()
-        ) {
+        if (!session.isRunning || session.startTimeMillis <= 0 || !settings.notificationsEnabled) {
             cancelTargetNotification(context)
             return
         }
@@ -49,11 +49,25 @@ class TargetNotificationReceiver : BroadcastReceiver() {
         val grossMinutes = (
             (System.currentTimeMillis() - session.startTimeMillis).coerceAtLeast(0) / 60_000
         ).toInt()
-        val threshold =
+        val dailyThreshold =
             (settings.dailyTargetMinutes - settings.notificationOffsetMinutes).coerceAtLeast(0)
         val netMinutes = WorkTimeCalculator.calculateNetMinutes(grossMinutes, settings.breakConfig)
-        if (netMinutes < threshold) {
-            scheduleTargetNotification(context, session.startTimeMillis, settings)
+        val completedWeekMinutes = entries.totalNetMinutes(
+            settings.breakConfig,
+            excluding = today.dayOfWeek
+        )
+        val dailyReached = settings.lastNotificationDate != today.toString() &&
+            netMinutes >= dailyThreshold
+        val weeklyReached =
+            settings.lastWeeklyNotification != WorkSessionStore.weekId(today) &&
+                completedWeekMinutes + netMinutes >= settings.weeklyTargetMinutes
+        if (!dailyReached && !weeklyReached) {
+            scheduleTargetNotification(
+                context,
+                session.startTimeMillis,
+                settings,
+                completedWeekMinutes
+            )
             return
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -72,8 +86,22 @@ class TargetNotificationReceiver : BroadcastReceiver() {
         )
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(context.getString(R.string.target_notification_title))
-            .setContentText(context.getString(R.string.target_notification_text))
+            .setContentTitle(
+                context.getString(
+                    if (weeklyReached) R.string.weekly_target_notification_title
+                    else R.string.target_notification_title
+                )
+            )
+            .setContentText(
+                if (weeklyReached) {
+                    context.getString(
+                        R.string.weekly_target_notification_text,
+                        WorkTimeCalculator.formatDuration(settings.weeklyTargetMinutes)
+                    )
+                } else {
+                    context.getString(R.string.target_notification_text)
+                }
+            )
             .setContentIntent(openAppIntent)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -83,7 +111,14 @@ class TargetNotificationReceiver : BroadcastReceiver() {
         } catch (_: SecurityException) {
             return
         }
-        store.markNotificationShown(today)
+        if (weeklyReached) store.markWeeklyNotificationShown(today)
+        if (dailyReached) store.markNotificationShown(today)
+        scheduleTargetNotification(
+            context,
+            session.startTimeMillis,
+            store.settings.first(),
+            completedWeekMinutes
+        )
     }
 
     private fun createNotificationChannel(context: Context) {

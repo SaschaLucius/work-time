@@ -45,12 +45,46 @@ class TargetNotificationSchedulerTest {
     }
 
     @Test
-    fun `notification already shown today has no trigger`() {
+    fun `notifications already shown for day and week have no trigger`() {
         val settings = WorkSessionStore.AppSettings(
             notificationsEnabled = true,
-            lastNotificationDate = today.toString()
+            lastNotificationDate = today.toString(),
+            lastWeeklyNotification = WorkSessionStore.weekId(today)
         )
 
         assertNull(targetNotificationTriggerMillis(1_000L, settings, today))
+    }
+
+    @Test
+    fun `weekly target triggers when remaining week time is reached`() {
+        val settings = WorkSessionStore.AppSettings(notificationsEnabled = true)
+
+        assertEquals(
+            1_000L + 30 * 60_000L,
+            targetNotificationTriggerMillis(
+                startTimeMillis = 1_000L,
+                settings = settings,
+                today = today,
+                completedWeekMinutes = 38 * 60 + 30
+            )
+        )
+    }
+
+    @Test
+    fun `daily reminder remains after weekly notification`() {
+        val settings = WorkSessionStore.AppSettings(
+            notificationsEnabled = true,
+            lastWeeklyNotification = WorkSessionStore.weekId(today)
+        )
+
+        assertEquals(
+            1_000L + 510 * 60_000L,
+            targetNotificationTriggerMillis(
+                startTimeMillis = 1_000L,
+                settings = settings,
+                today = today,
+                completedWeekMinutes = 38 * 60 + 30
+            )
+        )
     }
 }

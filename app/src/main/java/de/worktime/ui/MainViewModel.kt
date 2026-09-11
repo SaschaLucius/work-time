@@ -12,6 +12,7 @@ import de.worktime.MidnightResetReceiver
 import de.worktime.cancelTargetNotification
 import de.worktime.scheduleTargetNotification
 import de.worktime.data.WorkSessionStore
+import de.worktime.data.totalNetMinutes
 import de.worktime.domain.WorkTimeCalculator
 import de.worktime.widget.WorkTimeWidget
 import de.worktime.widget.cancelWidgetTick
@@ -70,7 +71,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     scheduleTargetNotification(
                         getApplication(),
                         session.startTimeMillis,
-                        _state.value.settings
+                        _state.value.settings,
+                        completedWeekMinutes()
                     )
                 } else if (!session.isRunning && session.startTimeMillis > 0 &&
                     (currentState.isRunning || currentState.startTimeMillis != session.startTimeMillis)
@@ -104,7 +106,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val startTimeMillis = _state.value.startTimeMillis
                 if (startTimeMillis > 0) recalculate(startTimeMillis)
                 if (_state.value.isRunning) {
-                    scheduleTargetNotification(getApplication(), startTimeMillis, settings)
+                    scheduleTargetNotification(
+                        getApplication(),
+                        startTimeMillis,
+                        settings,
+                        completedWeekMinutes()
+                    )
                 } else {
                     cancelTargetNotification(getApplication())
                 }
@@ -114,6 +121,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             store.weekEntries.collect { entries ->
                 _state.update { it.copy(weekEntries = entries) }
+                if (_state.value.isRunning) {
+                    scheduleTargetNotification(
+                        getApplication(),
+                        _state.value.startTimeMillis,
+                        _state.value.settings,
+                        completedWeekMinutes()
+                    )
+                }
             }
         }
     }
@@ -126,7 +141,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             startTicker(now)
             scheduleMidnightReset()
             scheduleWidgetTick(getApplication(), now)
-            scheduleTargetNotification(getApplication(), now, _state.value.settings)
+            scheduleTargetNotification(
+                getApplication(),
+                now,
+                _state.value.settings,
+                completedWeekMinutes()
+            )
             WorkTimeWidget().updateAll(getApplication())
         }
     }
@@ -170,7 +190,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 scheduleTargetNotification(
                     getApplication(),
                     newStartMillis,
-                    _state.value.settings
+                    _state.value.settings,
+                    completedWeekMinutes()
                 )
             }
         }
@@ -185,6 +206,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun updateDailyTarget(minutes: Int) {
         viewModelScope.launch {
             store.updateDailyTarget(minutes)
+        }
+    }
+
+    fun updateWeeklyTarget(minutes: Int) {
+        viewModelScope.launch {
+            store.updateWeeklyTarget(minutes)
         }
     }
 
@@ -296,6 +323,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 requiredBreakMinutes = breakMinutes
             )
         }
+    }
+
+    private fun completedWeekMinutes(today: LocalDate = LocalDate.now()): Int {
+        val state = _state.value
+        return state.weekEntries.totalNetMinutes(
+            state.settings.breakConfig,
+            excluding = today.dayOfWeek
+        )
     }
 
     fun scheduleMidnightReset() {

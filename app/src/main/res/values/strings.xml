@@ -7,4 +7,6 @@
     <string name="target_notification_channel">Arbeitszeit-Ziel</string>
     <string name="target_notification_title">Tagesziel erreicht</string>
     <string name="target_notification_text">Deine geplante Arbeitszeit ist erreicht.</string>
+    <string name="weekly_target_notification_title">Wochenziel erreicht</string>
+    <string name="weekly_target_notification_text">Du hast dein Wochenziel von %1$s erreicht.</string>
 </resources>

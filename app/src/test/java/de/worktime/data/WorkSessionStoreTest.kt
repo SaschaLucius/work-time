@@ -29,9 +29,12 @@ class WorkSessionStoreTest {
 
         store.updateBreakMinutes(20, 50)
         store.updateDailyTarget(7 * 60)
+        store.updateWeeklyTarget(37 * 60 + 30)
         store.updateNotificationsEnabled(true)
         store.updateNotificationOffset(15)
-        store.markNotificationShown(LocalDate.of(2026, 9, 1))
+        val notificationDate = LocalDate.of(2026, 9, 1)
+        store.markNotificationShown(notificationDate)
+        store.markWeeklyNotificationShown(notificationDate)
         store.updateShowWeekends(true)
 
         assertEquals(
@@ -39,9 +42,11 @@ class WorkSessionStoreTest {
                 firstBreakMinutes = 20,
                 secondBreakMinutes = 50,
                 dailyTargetMinutes = 7 * 60,
+                weeklyTargetMinutes = 37 * 60 + 30,
                 notificationsEnabled = true,
                 notificationOffsetMinutes = 15,
                 lastNotificationDate = "2026-09-01",
+                lastWeeklyNotification = "2026-36",
                 showWeekends = true
             ),
             store.settings.first()
@@ -64,6 +69,7 @@ class WorkSessionStoreTest {
 
         assertIllegalArgument { store.updateBreakMinutes(45, 30) }
         assertIllegalArgument { store.updateDailyTarget(0) }
+        assertIllegalArgument { store.updateWeeklyTarget(0) }
         assertIllegalArgument { store.updateNotificationOffset(-1) }
     }
 
