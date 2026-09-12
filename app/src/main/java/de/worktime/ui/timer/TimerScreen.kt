@@ -116,7 +116,7 @@ fun TimerScreen(viewModel: MainViewModel) {
                 .height(52.dp)
         ) {
             Text(
-                text = if (state.isRunning) "Tag beenden" else "Start",
+                text = if (state.isRunning) "Arbeitstag beenden" else "Start",
                 style = MaterialTheme.typography.titleMedium
             )
         }
@@ -214,7 +214,7 @@ fun TimerScreen(viewModel: MainViewModel) {
                         when {
                             offersWeekReset -> "Löschen & beenden"
                             overwritesEntry -> "Überschreiben"
-                            else -> "Tag beenden"
+                            else -> "Arbeitstag beenden"
                         }
                     )
                 }
