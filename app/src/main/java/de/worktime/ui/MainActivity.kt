@@ -103,7 +103,13 @@ private fun ArbeitsApp(openTimerRequests: kotlinx.coroutines.flow.Flow<Unit>) {
                             }
                         },
                         icon = tab.icon,
-                        label = { Text(tab.label) }
+                        label = {
+                            Text(
+                                text = tab.label,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
                     )
                 }
             }
