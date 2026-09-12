@@ -51,19 +51,18 @@ fun TimerScreen(viewModel: MainViewModel) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // Status
-        Text(
-            text = if (state.isRunning)
-                "Läuft seit ${formatStartTime(state.startTimeMillis)}"
-            else if (state.startTimeMillis > 0)
-                "Gestoppt · Start: ${formatStartTime(state.startTimeMillis)}"
-            else
-                "Bereit",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        if (state.startTimeMillis > 0) {
+            Text(
+                text = if (state.isRunning)
+                    "Läuft seit ${formatStartTime(state.startTimeMillis)}"
+                else
+                    "Gestoppt · Start: ${formatStartTime(state.startTimeMillis)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
-        Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(12.dp))
+        }
 
         // Hauptanzeige: Netto-Arbeitszeit
         Text(
