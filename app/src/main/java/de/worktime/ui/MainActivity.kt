@@ -78,8 +78,8 @@ private fun ArbeitsApp(openTimerRequests: kotlinx.coroutines.flow.Flow<Unit>) {
 
     val tabs = listOf(
         NavTab("timer", "Timer") { Icon(Icons.Default.Timer, contentDescription = "Timer") },
-        NavTab("rechner", "Rechner") { Icon(Icons.Default.Calculate, contentDescription = "Rechner") },
         NavTab("woche", "Woche") { Icon(Icons.Default.DateRange, contentDescription = "Woche") },
+        NavTab("rechner", "Rechner") { Icon(Icons.Default.Calculate, contentDescription = "Rechner") },
         NavTab("settings", "Einstellungen") {
             Icon(Icons.Default.Settings, contentDescription = "Einstellungen")
         }
