@@ -36,7 +36,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.worktime.data.WorkSessionStore
-import de.worktime.data.netMinutes
 import de.worktime.domain.WorkTimeCalculator
 import de.worktime.ui.common.ZeitPickerDialog
 import java.time.DayOfWeek
@@ -45,24 +44,24 @@ import java.time.DayOfWeek
 @Composable
 fun WochensaldoScreen(
     entries: Map<DayOfWeek, WorkSessionStore.WeekEntry>,
+    runningDraft: RunningDayDraft?,
     breakConfig: WorkTimeCalculator.BreakConfig,
     showWeekends: Boolean,
     weeklyTargetMinutes: Int,
     onStartChange: (DayOfWeek, Int) -> Unit,
     onEndChange: (DayOfWeek, Int) -> Unit,
+    onDraftStartChange: (Int) -> Unit,
     onResetDay: (DayOfWeek) -> Unit,
     onResetWeek: () -> Unit
 ) {
     val context = LocalContext.current
-    val workDays = WorkSessionStore.WORK_DAYS.take(5)
-    val weekendDays = WorkSessionStore.WORK_DAYS.drop(5)
-    val visibleDays = if (
-        showWeekends || weekendDays.any { day -> entries[day]?.hasValue == true }
-    ) {
-        workDays + weekendDays
-    } else {
-        workDays
-    }
+    val overview = buildWeekOverviewModel(
+        entries = entries,
+        runningDraft = runningDraft,
+        breakConfig = breakConfig,
+        showWeekends = showWeekends,
+        weeklyTargetMinutes = weeklyTargetMinutes
+    )
     val dayLabels = mapOf(
         DayOfWeek.MONDAY to "Mo",
         DayOfWeek.TUESDAY to "Di",
@@ -77,15 +76,6 @@ fun WochensaldoScreen(
     var activePicker by rememberSaveable { mutableStateOf<Pair<Int, Boolean>?>(null) }
     var showResetDialog by rememberSaveable { mutableStateOf(false) }
     var invalidTimeRange by rememberSaveable { mutableStateOf(false) }
-
-    val netMinutesPerDay = visibleDays.associateWith { day ->
-        val entry = entries[day] ?: WorkSessionStore.WeekEntry()
-        entry.netMinutes(breakConfig)
-    }
-
-    val totalMinutes = netMinutesPerDay.values.filterNotNull().sum()
-    val balanceMinutes = totalMinutes - weeklyTargetMinutes
-    val filledDays = netMinutesPerDay.values.count { it != null }
 
     Column(
         modifier = Modifier
@@ -132,18 +122,19 @@ fun WochensaldoScreen(
 
         Spacer(Modifier.height(24.dp))
 
-        visibleDays.forEachIndexed { i, day ->
-            val entry = entries[day] ?: WorkSessionStore.WeekEntry()
+        overview.days.forEachIndexed { i, dayOverview ->
+            val day = dayOverview.day
             TagZeile(
-            label = dayLabels.getValue(day),
-                startMinutes = entry.startMinutes,
-                endMinutes = entry.endMinutes,
-                netMinutes = netMinutesPerDay[day],
+                label = dayLabels.getValue(day),
+                startMinutes = dayOverview.startMinutes,
+                endMinutes = dayOverview.endMinutes,
+                netMinutes = dayOverview.netMinutes,
+                isRunningDraft = dayOverview.isRunningDraft,
                 onStartClick = { activePicker = Pair(i, true) },
                 onEndClick = { activePicker = Pair(i, false) },
                 onResetClick = { onResetDay(day) }
             )
-            if (i < visibleDays.lastIndex) {
+            if (i < overview.days.lastIndex) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             }
         }
@@ -172,12 +163,16 @@ fun WochensaldoScreen(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = if (filledDays > 0) "Gesamt ($filledDays Tag${if (filledDays == 1) "" else "e"})" else "Gesamt",
+                    text = summaryLabel(overview.filledDays, overview.isProvisional),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Text(
-                    text = if (filledDays > 0) WorkTimeCalculator.formatDuration(totalMinutes) else "--:--",
+                    text = if (overview.filledDays > 0) {
+                        WorkTimeCalculator.formatDuration(overview.totalMinutes)
+                    } else {
+                        "--:--"
+                    },
                     fontSize = 48.sp,
                     fontWeight = FontWeight.Light,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -192,7 +187,11 @@ fun WochensaldoScreen(
                 )
                 SummaryRow(
                     label = "Saldo",
-                    value = if (filledDays > 0) formatSignedDuration(balanceMinutes) else "--:--"
+                    value = if (overview.filledDays > 0) {
+                        formatSignedDuration(overview.balanceMinutes)
+                    } else {
+                        "--:--"
+                    }
                 )
             }
         }
@@ -200,9 +199,9 @@ fun WochensaldoScreen(
 
     // Time picker dialog
     activePicker?.let { (dayIndex, isStart) ->
-        val day = visibleDays[dayIndex]
-        val entry = entries[day] ?: WorkSessionStore.WeekEntry()
-        val current = if (isStart) entry.startMinutes else entry.endMinutes
+        val dayOverview = overview.days[dayIndex]
+        val day = dayOverview.day
+        val current = if (isStart) dayOverview.startMinutes else dayOverview.endMinutes
         val dayLabel = dayLabels.getValue(day)
         val pickerTitle = if (isStart) "Start $dayLabel" else "Ende $dayLabel"
 
@@ -213,12 +212,14 @@ fun WochensaldoScreen(
             onConfirm = { hour, minute ->
                 val newTime = hour * 60 + minute
                 val isValid = if (isStart) {
-                    entry.endMinutes == null || newTime <= entry.endMinutes
+                    dayOverview.endMinutes == null || newTime <= dayOverview.endMinutes
                 } else {
-                    entry.startMinutes == null || entry.startMinutes <= newTime
+                    dayOverview.startMinutes == null || dayOverview.startMinutes <= newTime
                 }
                 if (isValid) {
-                    if (isStart) {
+                    if (dayOverview.isRunningDraft) {
+                        onDraftStartChange(newTime)
+                    } else if (isStart) {
                         onStartChange(day, newTime)
                     } else {
                         onEndChange(day, newTime)
@@ -293,6 +294,7 @@ private fun TagZeile(
     startMinutes: Int?,
     endMinutes: Int?,
     netMinutes: Int?,
+    isRunningDraft: Boolean,
     onStartClick: () -> Unit,
     onEndClick: () -> Unit,
     onResetClick: () -> Unit
@@ -304,13 +306,21 @@ private fun TagZeile(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.weight(0.6f),
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        Column(modifier = Modifier.weight(0.8f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            if (isRunningDraft) {
+                Text(
+                    text = "Laufend · nicht gespeichert",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+            }
+        }
         OutlinedButton(
             onClick = onStartClick,
             modifier = Modifier.weight(1f)
@@ -322,6 +332,7 @@ private fun TagZeile(
         }
         OutlinedButton(
             onClick = onEndClick,
+            enabled = !isRunningDraft,
             modifier = Modifier.weight(1f)
         ) {
             Text(
@@ -339,7 +350,7 @@ private fun TagZeile(
         )
         IconButton(
             onClick = onResetClick,
-            enabled = startMinutes != null || endMinutes != null
+            enabled = !isRunningDraft && (startMinutes != null || endMinutes != null)
         ) {
             Icon(
                 Icons.Default.RestartAlt,
@@ -347,6 +358,12 @@ private fun TagZeile(
             )
         }
     }
+}
+
+private fun summaryLabel(filledDays: Int, isProvisional: Boolean): String {
+    if (filledDays == 0) return "Gesamt"
+    val days = "$filledDays Tag${if (filledDays == 1) "" else "e"}"
+    return if (isProvisional) "Gesamt (vorläufig, $days)" else "Gesamt ($days)"
 }
 
 private fun formatTime(minutes: Int): String = "%02d:%02d".format(minutes / 60, minutes % 60)

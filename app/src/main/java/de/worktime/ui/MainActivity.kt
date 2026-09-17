@@ -31,8 +31,13 @@ import de.worktime.ui.calculator.RechnerScreen
 import de.worktime.ui.settings.SettingsScreen
 import de.worktime.ui.theme.ArbeitsTheme
 import de.worktime.ui.timer.TimerScreen
+import de.worktime.ui.woche.RunningDayDraft
 import de.worktime.ui.woche.WochensaldoScreen
 import kotlinx.coroutines.flow.MutableSharedFlow
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -125,13 +130,35 @@ private fun ArbeitsApp(openTimerRequests: kotlinx.coroutines.flow.Flow<Unit>) {
             composable("timer") { TimerScreen(viewModel) }
             composable("rechner") { RechnerScreen(state.settings.breakConfig) }
             composable("woche") {
+                val zoneId = ZoneId.systemDefault()
+                val now = Instant.ofEpochMilli(System.currentTimeMillis()).atZone(zoneId)
+                val runningDraft = if (state.isRunning && state.startTimeMillis > 0) {
+                    val start = Instant.ofEpochMilli(state.startTimeMillis).atZone(zoneId)
+                    RunningDayDraft(
+                        day = now.dayOfWeek,
+                        startMinutes = start.hour * 60 + start.minute,
+                        endMinutes = now.hour * 60 + now.minute,
+                        netMinutes = state.netMinutes
+                    )
+                } else {
+                    null
+                }
                 WochensaldoScreen(
                     entries = state.weekEntries,
+                    runningDraft = runningDraft,
                     breakConfig = state.settings.breakConfig,
                     showWeekends = state.settings.showWeekends,
                     weeklyTargetMinutes = state.settings.weeklyTargetMinutes,
                     onStartChange = viewModel::updateWeekStart,
                     onEndChange = viewModel::updateWeekEnd,
+                    onDraftStartChange = { minutes ->
+                        val startMillis = LocalDate.now()
+                            .atTime(LocalTime.of(minutes / 60, minutes % 60))
+                            .atZone(zoneId)
+                            .toInstant()
+                            .toEpochMilli()
+                        viewModel.adjustStartTime(startMillis)
+                    },
                     onResetDay = viewModel::resetWeekDay,
                     onResetWeek = viewModel::resetWeek
                 )
