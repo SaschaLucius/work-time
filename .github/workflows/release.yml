@@ -39,7 +39,10 @@ jobs:
           distribution: "temurin"
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          # Google removed the legacy `tools` package; v3 still tries to install it.
+          packages: platform-tools
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
