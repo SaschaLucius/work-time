@@ -1,5 +1,6 @@
 package de.worktime.ui.timer
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,6 +25,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -52,29 +54,43 @@ fun TimerScreen(viewModel: MainViewModel) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        if (state.startTimeMillis > 0) {
+        val canEditStartTime = state.startTimeMillis > 0
+        val openStartPicker = {
+            if (canEditStartTime) showStartPicker = true
+        }
+
+        if (canEditStartTime) {
             Text(
                 text = if (state.isRunning)
                     "Läuft seit ${formatStartTime(state.startTimeMillis)}"
                 else
                     "Gestoppt · Start: ${formatStartTime(state.startTimeMillis)}",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.clickable(
+                    role = Role.Button,
+                    onClick = openStartPicker
+                )
             )
 
             Spacer(Modifier.height(12.dp))
         }
 
-        // Hauptanzeige: Netto-Arbeitszeit
+        // Hauptanzeige: Netto-Arbeitszeit — Antippen öffnet Startzeit-Anpassung
         Text(
-            text = if (state.startTimeMillis > 0)
+            text = if (canEditStartTime)
                 WorkTimeCalculator.formatDuration(state.netMinutes)
             else
                 "--:--",
             fontSize = 72.sp,
             fontWeight = FontWeight.Light,
             color = MaterialTheme.colorScheme.onSurface,
-            lineHeight = 72.sp
+            lineHeight = 72.sp,
+            modifier = if (canEditStartTime) {
+                Modifier.clickable(role = Role.Button, onClick = openStartPicker)
+            } else {
+                Modifier
+            }
         )
 
         Text(
@@ -129,14 +145,14 @@ fun TimerScreen(viewModel: MainViewModel) {
             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
         ) {
             OutlinedButton(
-                onClick = { showStartPicker = true },
-                enabled = state.startTimeMillis > 0
+                onClick = openStartPicker,
+                enabled = canEditStartTime
             ) {
                 Text("Startzeit")
             }
             OutlinedButton(
                 onClick = { viewModel.reset() },
-                enabled = state.startTimeMillis > 0 || state.isRunning
+                enabled = canEditStartTime || state.isRunning
             ) {
                 Text("Zurücksetzen")
             }
