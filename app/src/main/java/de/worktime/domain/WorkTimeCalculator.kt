@@ -111,4 +111,78 @@ object WorkTimeCalculator {
         val gross = (endMinutes - startMinutes).coerceAtLeast(0)
         return calculateNetMinutes(gross, breakConfig)
     }
+
+    /** Manuelle Pause als Minuten seit Mitternacht. */
+    data class ManualBreak(
+        val startMinutes: Int,
+        val endMinutes: Int
+    ) {
+        val durationMinutes: Int
+            get() = (endMinutes - startMinutes).coerceAtLeast(0)
+    }
+
+    /**
+     * Ergebnis der Netto-Berechnung mit manuellen Pausen.
+     *
+     * Ist die Summe der manuellen Pausen kürzer als die Pflichtpause,
+     * wird die fehlende Dauer zusätzlich abgezogen ([addedMandatoryMinutes]).
+     */
+    data class ManualBreakResult(
+        val grossMinutes: Int,
+        val manualBreakMinutes: Int,
+        val requiredBreakMinutes: Int,
+        val addedMandatoryMinutes: Int,
+        val effectiveBreakMinutes: Int,
+        val netMinutes: Int
+    ) {
+        val mandatoryBreakCovered: Boolean
+            get() = addedMandatoryMinutes == 0
+    }
+
+    /**
+     * Berechnet die Netto-Arbeitszeit unter Berücksichtigung manueller Pausen.
+     *
+     * - Manuelle Pausen werden vom Brutto abgezogen.
+     * - Reicht ihre Summe für die gesetzliche Pflichtpause, wird nichts Extra abgezogen.
+     * - Sonst wird die fehlende Pflichtpause zusätzlich abgezogen.
+     */
+    fun calculateWithManualBreaks(
+        startMinutes: Int,
+        endMinutes: Int,
+        breaks: List<ManualBreak>,
+        breakConfig: BreakConfig = BreakConfig()
+    ): ManualBreakResult {
+        val gross = (endMinutes - startMinutes).coerceAtLeast(0)
+        val manualBreakMinutes = breaks.sumOf { breakEntry ->
+            breakDurationWithinShift(
+                breakStart = breakEntry.startMinutes,
+                breakEnd = breakEntry.endMinutes,
+                shiftStart = startMinutes,
+                shiftEnd = endMinutes
+            )
+        }
+        val required = requiredBreakMinutes(gross, breakConfig)
+        val addedMandatory = (required - manualBreakMinutes).coerceAtLeast(0)
+        val effectiveBreak = manualBreakMinutes + addedMandatory
+        return ManualBreakResult(
+            grossMinutes = gross,
+            manualBreakMinutes = manualBreakMinutes,
+            requiredBreakMinutes = required,
+            addedMandatoryMinutes = addedMandatory,
+            effectiveBreakMinutes = effectiveBreak,
+            netMinutes = (gross - effectiveBreak).coerceAtLeast(0)
+        )
+    }
+
+    private fun breakDurationWithinShift(
+        breakStart: Int,
+        breakEnd: Int,
+        shiftStart: Int,
+        shiftEnd: Int
+    ): Int {
+        if (breakEnd <= breakStart) return 0
+        val clampedStart = maxOf(breakStart, shiftStart)
+        val clampedEnd = minOf(breakEnd, shiftEnd)
+        return (clampedEnd - clampedStart).coerceAtLeast(0)
+    }
 }

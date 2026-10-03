@@ -105,4 +105,76 @@ class WorkTimeCalculatorTest {
             )
         )
     }
+
+    @Test
+    fun `manual breaks covering mandatory break are deducted without extra pause`() {
+        // 08:30–17:00 = 510 Min. Brutto → 30 Min. Pflichtpause
+        val result = WorkTimeCalculator.calculateWithManualBreaks(
+            startMinutes = 8 * 60 + 30,
+            endMinutes = 17 * 60,
+            breaks = listOf(
+                WorkTimeCalculator.ManualBreak(
+                    startMinutes = 12 * 60,
+                    endMinutes = 12 * 60 + 30
+                )
+            )
+        )
+
+        assertEquals(510, result.grossMinutes)
+        assertEquals(30, result.manualBreakMinutes)
+        assertEquals(30, result.requiredBreakMinutes)
+        assertEquals(0, result.addedMandatoryMinutes)
+        assertEquals(true, result.mandatoryBreakCovered)
+        assertEquals(480, result.netMinutes)
+    }
+
+    @Test
+    fun `short manual break triggers added mandatory break`() {
+        val result = WorkTimeCalculator.calculateWithManualBreaks(
+            startMinutes = 8 * 60 + 30,
+            endMinutes = 17 * 60,
+            breaks = listOf(
+                WorkTimeCalculator.ManualBreak(
+                    startMinutes = 12 * 60,
+                    endMinutes = 12 * 60 + 15
+                )
+            )
+        )
+
+        assertEquals(15, result.manualBreakMinutes)
+        assertEquals(30, result.requiredBreakMinutes)
+        assertEquals(15, result.addedMandatoryMinutes)
+        assertEquals(false, result.mandatoryBreakCovered)
+        assertEquals(480, result.netMinutes)
+    }
+
+    @Test
+    fun `longer manual breaks are fully deducted when mandatory is covered`() {
+        val result = WorkTimeCalculator.calculateWithManualBreaks(
+            startMinutes = 8 * 60,
+            endMinutes = 17 * 60,
+            breaks = listOf(
+                WorkTimeCalculator.ManualBreak(12 * 60, 12 * 60 + 30),
+                WorkTimeCalculator.ManualBreak(15 * 60, 15 * 60 + 15)
+            )
+        )
+
+        assertEquals(45, result.manualBreakMinutes)
+        assertEquals(30, result.requiredBreakMinutes)
+        assertEquals(0, result.addedMandatoryMinutes)
+        assertEquals(540 - 45, result.netMinutes)
+    }
+
+    @Test
+    fun `no manual breaks still deducts mandatory break`() {
+        val result = WorkTimeCalculator.calculateWithManualBreaks(
+            startMinutes = 8 * 60 + 30,
+            endMinutes = 17 * 60,
+            breaks = emptyList()
+        )
+
+        assertEquals(0, result.manualBreakMinutes)
+        assertEquals(30, result.addedMandatoryMinutes)
+        assertEquals(480, result.netMinutes)
+    }
 }
