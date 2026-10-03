@@ -56,4 +56,53 @@ class WorkTimeCalculatorTest {
         assertEquals(401, WorkTimeCalculator.grossMinutesToReachNetTarget(361, config))
         assertEquals(630, WorkTimeCalculator.grossMinutesToReachNetTarget(570, config))
     }
+
+    @Test
+    fun `feierabend includes mandatory break for eight hour day`() {
+        // 8 Std. Netto → 8:30 Brutto (30 Min. Pause)
+        assertEquals(
+            1_000L + 510 * 60_000L,
+            WorkTimeCalculator.feierabendMillis(
+                startTimeMillis = 1_000L,
+                dailyTargetMinutes = 8 * 60
+            )
+        )
+    }
+
+    @Test
+    fun `wochenende is null when remaining exceeds legal day maximum`() {
+        assertEquals(
+            null,
+            WorkTimeCalculator.wochenendeMillis(
+                startTimeMillis = 1_000L,
+                weeklyTargetMinutes = 39 * 60,
+                completedWeekMinutes = 0
+            )
+        )
+    }
+
+    @Test
+    fun `wochenende is null when week goal already reached`() {
+        assertEquals(
+            null,
+            WorkTimeCalculator.wochenendeMillis(
+                startTimeMillis = 1_000L,
+                weeklyTargetMinutes = 39 * 60,
+                completedWeekMinutes = 39 * 60
+            )
+        )
+    }
+
+    @Test
+    fun `wochenende returns time when remaining fits today`() {
+        // 30 Min. Rest → keine Pause nötig
+        assertEquals(
+            1_000L + 30 * 60_000L,
+            WorkTimeCalculator.wochenendeMillis(
+                startTimeMillis = 1_000L,
+                weeklyTargetMinutes = 39 * 60,
+                completedWeekMinutes = 38 * 60 + 30
+            )
+        )
+    }
 }

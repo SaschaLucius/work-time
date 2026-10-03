@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.worktime.data.totalNetMinutes
 import de.worktime.domain.WorkTimeCalculator
 import de.worktime.ui.MainViewModel
 import de.worktime.ui.TimerUiState
@@ -138,6 +139,37 @@ fun TimerScreen(viewModel: MainViewModel) {
                 enabled = state.startTimeMillis > 0 || state.isRunning
             ) {
                 Text("Zurücksetzen")
+            }
+        }
+
+        if (state.startTimeMillis > 0) {
+            val breakConfig = state.settings.breakConfig
+            val feierabendMillis = WorkTimeCalculator.feierabendMillis(
+                startTimeMillis = state.startTimeMillis,
+                dailyTargetMinutes = state.settings.dailyTargetMinutes,
+                breakConfig = breakConfig
+            )
+            val completedWeekMinutes = state.weekEntries.totalNetMinutes(
+                breakConfig = breakConfig,
+                excluding = currentDay
+            )
+            val wochenendeMillis = WorkTimeCalculator.wochenendeMillis(
+                startTimeMillis = state.startTimeMillis,
+                weeklyTargetMinutes = state.settings.weeklyTargetMinutes,
+                completedWeekMinutes = completedWeekMinutes,
+                breakConfig = breakConfig
+            )
+
+            Spacer(Modifier.height(32.dp))
+
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                TargetEndTime(label = "Feierabend", timeMillis = feierabendMillis)
+                if (wochenendeMillis != null) {
+                    TargetEndTime(label = "Wochenende", timeMillis = wochenendeMillis)
+                }
             }
         }
     }
@@ -254,6 +286,23 @@ fun TimerScreen(viewModel: MainViewModel) {
                     Text("OK")
                 }
             }
+        )
+    }
+}
+
+@Composable
+private fun TargetEndTime(label: String, timeMillis: Long) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = formatStartTime(timeMillis),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Light,
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }

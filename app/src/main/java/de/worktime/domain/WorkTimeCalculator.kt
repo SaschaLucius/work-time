@@ -63,6 +63,36 @@ object WorkTimeCalculator {
     /** Prüft ob die gesetzliche Höchstarbeitszeit (10 Std.) überschritten wurde. */
     fun isOverMaximum(netMinutes: Int): Boolean = netMinutes > MAX_NET_MINUTES
 
+    /**
+     * Uhrzeit (Millis), zu der das Tagesziel erreicht ist:
+     * Startzeit + Pflichtpausen + Netto-Tagesziel.
+     */
+    fun feierabendMillis(
+        startTimeMillis: Long,
+        dailyTargetMinutes: Int,
+        breakConfig: BreakConfig = BreakConfig()
+    ): Long {
+        val grossMinutes = grossMinutesToReachNetTarget(dailyTargetMinutes, breakConfig)
+        return startTimeMillis + grossMinutes * 60_000L
+    }
+
+    /**
+     * Uhrzeit (Millis), zu der das Wochenziel heute erreicht wäre – oder null,
+     * wenn die Restzeit nicht mehr nötig ist bzw. nicht in den heutigen Tag passt
+     * (über gesetzliches Maximum).
+     */
+    fun wochenendeMillis(
+        startTimeMillis: Long,
+        weeklyTargetMinutes: Int,
+        completedWeekMinutes: Int,
+        breakConfig: BreakConfig = BreakConfig()
+    ): Long? {
+        val remainingNetMinutes = weeklyTargetMinutes - completedWeekMinutes
+        if (remainingNetMinutes <= 0 || remainingNetMinutes > MAX_NET_MINUTES) return null
+        val grossMinutes = grossMinutesToReachNetTarget(remainingNetMinutes, breakConfig)
+        return startTimeMillis + grossMinutes * 60_000L
+    }
+
     /** Formatiert Minuten als „HH:MM". */
     fun formatDuration(minutes: Int): String {
         val m = minutes.coerceAtLeast(0)
