@@ -207,7 +207,7 @@ fun TimerScreen(viewModel: MainViewModel) {
         val existingEntry = state.weekEntries[currentDay]
         val overwritesEntry = existingEntry?.hasValue == true
         val offersWeekReset = currentDay == java.time.DayOfWeek.MONDAY &&
-            state.weekEntries.values.any { entry -> entry.hasValue }
+            state.hasPreviousWeekEntries
         AlertDialog(
             onDismissRequest = { showEndDayDialog = false },
             title = {
@@ -254,7 +254,9 @@ fun TimerScreen(viewModel: MainViewModel) {
                 TextButton(
                     onClick = {
                         showEndDayDialog = false
-                        if (offersWeekReset) viewModel.endDay()
+                        if (offersWeekReset) {
+                            viewModel.endDay(keepPreviousWeek = true)
+                        }
                     }
                 ) {
                     Text(if (offersWeekReset) "Behalten & beenden" else "Abbrechen")

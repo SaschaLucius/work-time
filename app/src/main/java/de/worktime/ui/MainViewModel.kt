@@ -1,15 +1,12 @@
 package de.worktime.ui
 
-import android.app.AlarmManager
 import android.app.Application
-import android.app.PendingIntent
-import android.content.Context
-import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.glance.appwidget.updateAll
-import de.worktime.MidnightResetReceiver
+import de.worktime.cancelMidnightResetAlarm
 import de.worktime.cancelTargetNotification
+import de.worktime.scheduleMidnightResetAlarm
 import de.worktime.scheduleTargetNotification
 import de.worktime.data.WorkSessionStore
 import de.worktime.data.totalNetMinutes
@@ -39,7 +36,8 @@ data class TimerUiState(
     val endDayError: String? = null,
     val settings: WorkSessionStore.AppSettings = WorkSessionStore.AppSettings(),
     val weekEntries: Map<DayOfWeek, WorkSessionStore.WeekEntry> =
-        WorkSessionStore.WORK_DAYS.associateWith { WorkSessionStore.WeekEntry() }
+        WorkSessionStore.WORK_DAYS.associateWith { WorkSessionStore.WeekEntry() },
+    val hasPreviousWeekEntries: Boolean = false
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -53,8 +51,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             store.session.collect { session ->
                 // Prüfen ob das gespeicherte Datum noch heute ist
-                if (session.isRunning && session.sessionDate != LocalDate.now().toString()) {
-                    store.resetSession()
+                if (session.startTimeMillis > 0 &&
+                    session.sessionDate.isNotEmpty() &&
+                    session.sessionDate != LocalDate.now().toString()
+                ) {
+                    store.finalizeStaleSessionIfNeeded()
                     cancelTargetNotification(getApplication())
                     return@collect
                 }
@@ -67,7 +68,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     startTicker(session.startTimeMillis)
                     // Alarme können durch App-Update/Force-Stop verloren gehen → neu planen
                     scheduleWidgetTick(getApplication(), session.startTimeMillis)
-                    scheduleMidnightReset()
+                    scheduleMidnightResetAlarm(getApplication())
                     scheduleTargetNotification(
                         getApplication(),
                         session.startTimeMillis,
@@ -79,7 +80,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 ) {
                     // Gestoppte Session beim App-Start oder nach externer Änderung übernehmen
                     tickJob?.cancel()
-                    cancelMidnightReset()
+                    cancelMidnightResetAlarm(getApplication())
                     cancelWidgetTick(getApplication())
                     cancelTargetNotification(getApplication())
                     recalculate(session.startTimeMillis)
@@ -91,11 +92,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 ) {
                     // Persistierter Reset (z. B. Mitternacht) muss auch die laufende UI stoppen
                     tickJob?.cancel()
-                    cancelMidnightReset()
+                    cancelMidnightResetAlarm(getApplication())
                     cancelWidgetTick(getApplication())
                     cancelTargetNotification(getApplication())
                     _state.update {
-                        TimerUiState(settings = it.settings, weekEntries = it.weekEntries)
+                        TimerUiState(
+                            settings = it.settings,
+                            weekEntries = it.weekEntries,
+                            hasPreviousWeekEntries = it.hasPreviousWeekEntries
+                        )
                     }
                 }
             }
@@ -131,6 +136,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+        viewModelScope.launch {
+            store.hasPreviousWeekEntries.collect { hasPrevious ->
+                _state.update { it.copy(hasPreviousWeekEntries = hasPrevious) }
+            }
+        }
     }
 
     fun start() {
@@ -139,7 +149,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             store.startSession(now)
             _state.update { it.copy(isRunning = true, startTimeMillis = now) }
             startTicker(now)
-            scheduleMidnightReset()
+            scheduleMidnightResetAlarm(getApplication())
             scheduleWidgetTick(getApplication(), now)
             scheduleTargetNotification(
                 getApplication(),
@@ -155,7 +165,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             store.stopSession()
             tickJob?.cancel()
-            cancelMidnightReset()
+            cancelMidnightResetAlarm(getApplication())
             cancelWidgetTick(getApplication())
             cancelTargetNotification(getApplication())
             _state.update { it.copy(isRunning = false) }
@@ -167,13 +177,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             store.resetSession()
             tickJob?.cancel()
-            cancelMidnightReset()
+            cancelMidnightResetAlarm(getApplication())
             cancelWidgetTick(getApplication())
             cancelTargetNotification(getApplication())
             _state.update {
                 TimerUiState(
                     settings = it.settings,
-                    weekEntries = it.weekEntries
+                    weekEntries = it.weekEntries,
+                    hasPreviousWeekEntries = it.hasPreviousWeekEntries
                 )
             }
             WorkTimeWidget().updateAll(getApplication())
@@ -243,7 +254,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { store.resetWeekDay(day) }
     }
 
-    fun endDay(clearWeekBeforeSave: Boolean = false) {
+    fun endDay(
+        clearWeekBeforeSave: Boolean = false,
+        keepPreviousWeek: Boolean = false
+    ) {
         val currentState = _state.value
         val day = LocalDate.now().dayOfWeek
         if (!currentState.isRunning || currentState.startTimeMillis <= 0) return
@@ -261,13 +275,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 store.saveDayAndResetSession(
-                    day,
-                    startMinutes,
-                    endMinutes,
-                    clearWeekBeforeSave
+                    day = day,
+                    startMinutes = startMinutes,
+                    endMinutes = endMinutes,
+                    clearWeekBeforeSave = clearWeekBeforeSave,
+                    keepPreviousWeek = keepPreviousWeek
                 )
                 tickJob?.cancel()
-                cancelMidnightReset()
+                cancelMidnightResetAlarm(getApplication())
                 cancelWidgetTick(getApplication())
                 cancelTargetNotification(getApplication())
                 _state.update {
@@ -282,7 +297,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         settings = it.settings,
                         weekEntries = weekEntries + (
                             day to WorkSessionStore.WeekEntry(startMinutes, endMinutes)
-                        )
+                        ),
+                        hasPreviousWeekEntries = false
                     )
                 }
                 WorkTimeWidget().updateAll(getApplication())
@@ -333,33 +349,4 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    fun scheduleMidnightReset() {
-        val context = getApplication<Application>()
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val pi = midnightPendingIntent(context)
-        val midnight = LocalDate.now().plusDays(1)
-            .atStartOfDay(ZoneId.systemDefault())
-            .toInstant()
-            .toEpochMilli()
-        try {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, midnight, pi)
-        } catch (_: SecurityException) {
-            alarmManager.set(AlarmManager.RTC_WAKEUP, midnight, pi)
-        }
-    }
-
-    private fun cancelMidnightReset() {
-        val context = getApplication<Application>()
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        alarmManager.cancel(midnightPendingIntent(context))
-    }
-
-    private fun midnightPendingIntent(context: Context): PendingIntent {
-        val intent = Intent(context, MidnightResetReceiver::class.java)
-            .setAction("de.worktime.MIDNIGHT_RESET")
-        return PendingIntent.getBroadcast(
-            context, 0, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-    }
 }

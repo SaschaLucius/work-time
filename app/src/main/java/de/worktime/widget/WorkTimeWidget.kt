@@ -32,14 +32,14 @@ import androidx.glance.layout.padding
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
-import de.worktime.MidnightResetReceiver
+import de.worktime.cancelTargetNotification
+import de.worktime.scheduleMidnightResetAlarm
 import de.worktime.scheduleTargetNotification
 import de.worktime.data.WorkSessionStore
 import de.worktime.data.totalNetMinutes
 import de.worktime.domain.WorkTimeCalculator
 import de.worktime.ui.MainActivity
 import java.time.LocalDate
-import java.time.ZoneId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -85,14 +85,23 @@ fun cancelWidgetTick(context: Context) {
 }
 
 /**
- * Re-arms the minute tick if a session is running. AlarmManager drops all of an
- * app's alarms on package update / force-stop, so this must be called from every
- * entry point (widget update, app start, boot, package replaced) to self-heal.
+ * Finalizes a stale session if needed, then re-arms minute tick + midnight alarm
+ * when a session is still running. AlarmManager drops all of an app's alarms on
+ * package update / force-stop, so this must be called from every entry point
+ * (widget update, app start, boot, package replaced) to self-heal.
  */
 suspend fun ensureWidgetTick(context: Context) {
-    val session = WorkSessionStore(context).session.first()
+    val store = WorkSessionStore(context)
+    if (store.finalizeStaleSessionIfNeeded()) {
+        cancelWidgetTick(context)
+        cancelTargetNotification(context)
+        WorkTimeWidget().updateAll(context)
+        return
+    }
+    val session = store.session.first()
     if (session.isRunning && session.startTimeMillis > 0) {
         scheduleWidgetTick(context, session.startTimeMillis)
+        scheduleMidnightResetAlarm(context)
     }
 }
 
@@ -126,9 +135,13 @@ private fun WidgetContent(
     val widgetHeight = size.height.value
 
     // null = still loading from DataStore; treat the same as running-but-unknown
-    // to avoid flashing the Start button before the real state arrives
-    val isRunning = session?.isRunning == true && (session.startTimeMillis) > 0
-    val grossMinutes = if (isRunning && session != null) {
+    // to avoid flashing the Start button before the real state arrives.
+    // Stale (non-today) sessions must not keep counting until finalize runs.
+    val isTodaySession = session?.sessionDate == LocalDate.now().toString()
+    val isRunning = session?.isRunning == true &&
+        session.startTimeMillis > 0 &&
+        isTodaySession
+    val grossMinutes = if (isRunning) {
         ((System.currentTimeMillis() - session.startTimeMillis).coerceAtLeast(0) / 60_000).toInt()
     } else 0
     val netMinutes = WorkTimeCalculator.calculateNetMinutes(grossMinutes, settings.breakConfig)
@@ -220,35 +233,17 @@ class StartSessionAction : ActionCallback {
     ) {
         val startTimeMillis = (System.currentTimeMillis() / 60_000) * 60_000
         val store = WorkSessionStore(context)
+        store.finalizeStaleSessionIfNeeded()
         store.startSession(startTimeMillis)
         val settings = store.settings.first()
         val completedWeekMinutes = store.weekEntries.first().totalNetMinutes(
             settings.breakConfig,
             excluding = LocalDate.now().dayOfWeek
         )
-        scheduleMidnightAlarm(context)
+        scheduleMidnightResetAlarm(context)
         scheduleWidgetTick(context, startTimeMillis)
         scheduleTargetNotification(context, startTimeMillis, settings, completedWeekMinutes)
         WorkTimeWidget().updateAll(context)
-    }
-
-    private fun scheduleMidnightAlarm(context: Context) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = Intent(context, MidnightResetReceiver::class.java)
-            .setAction("de.worktime.MIDNIGHT_RESET")
-        val pi = PendingIntent.getBroadcast(
-            context, 0, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        val midnight = LocalDate.now().plusDays(1)
-            .atStartOfDay(ZoneId.systemDefault())
-            .toInstant()
-            .toEpochMilli()
-        try {
-            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, midnight, pi)
-        } catch (_: SecurityException) {
-            alarmManager.set(AlarmManager.RTC_WAKEUP, midnight, pi)
-        }
     }
 }
 
@@ -263,12 +258,19 @@ class WorkTimeWidgetReceiver : GlanceAppWidgetReceiver() {
                 CoroutineScope(Dispatchers.Main).launch {
                     try {
                         val store = WorkSessionStore(context)
+                        if (store.finalizeStaleSessionIfNeeded()) {
+                            cancelWidgetTick(context)
+                            cancelTargetNotification(context)
+                            WorkTimeWidget().updateAll(context)
+                            return@launch
+                        }
                         val session = store.session.first()
                         if (session.isRunning && session.startTimeMillis > 0) {
                             store.tickSession()
                             WorkTimeWidget().updateAll(context)
                             // Re-arm the next one-shot alarm for the following minute.
                             scheduleWidgetTick(context, session.startTimeMillis)
+                            scheduleMidnightResetAlarm(context)
                         } else {
                             cancelWidgetTick(context)
                         }

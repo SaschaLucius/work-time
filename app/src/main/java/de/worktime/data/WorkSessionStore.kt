@@ -11,9 +11,12 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import de.worktime.domain.WorkTimeCalculator
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.time.DayOfWeek
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.temporal.IsoFields
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "work_session")
@@ -123,11 +126,20 @@ class WorkSessionStore internal constructor(
         }
     }
 
+    /** True when prefs still hold entries from a prior ISO week (hidden by [weekEntries]). */
+    val hasPreviousWeekEntries: Flow<Boolean> = dataStore.data.map { prefs ->
+        val storedWeekId = prefs[KEY_WEEK_ID] ?: return@map false
+        if (storedWeekId == currentWeekId()) return@map false
+        WORK_DAYS.any { day ->
+            prefs[startKey(day)] != null || prefs[endKey(day)] != null
+        }
+    }
+
     suspend fun startSession(startTimeMillis: Long) {
         dataStore.edit { prefs ->
             prefs[KEY_START_TIME] = startTimeMillis
             prefs[KEY_IS_RUNNING] = true
-            prefs[KEY_SESSION_DATE] = LocalDate.now().toString()
+            prefs[KEY_SESSION_DATE] = todayProvider().toString()
         }
     }
 
@@ -145,11 +157,48 @@ class WorkSessionStore internal constructor(
 
     suspend fun resetSession() {
         dataStore.edit { prefs ->
-            prefs[KEY_START_TIME] = -1L
-            prefs[KEY_IS_RUNNING] = false
-            prefs[KEY_SESSION_DATE] = ""
-            prefs[KEY_TICK_COUNT] = 0L
+            clearSessionKeys(prefs)
         }
+    }
+
+    /**
+     * If a session belongs to a past calendar day, saves that day into the week
+     * store (end of that day, 23:59) and clears the session.
+     *
+     * Returns true when a stale session was handled (saved or discarded).
+     */
+    suspend fun finalizeStaleSessionIfNeeded(): Boolean {
+        val session = session.first()
+        if (session.startTimeMillis <= 0L || session.sessionDate.isEmpty()) return false
+        val today = todayProvider()
+        if (session.sessionDate == today.toString()) return false
+
+        val sessionDate = runCatching { LocalDate.parse(session.sessionDate) }.getOrNull()
+        if (sessionDate == null) {
+            resetSession()
+            return true
+        }
+
+        val startTime = Instant.ofEpochMilli(session.startTimeMillis)
+            .atZone(ZoneId.systemDefault())
+            .toLocalTime()
+        val startMinutes = startTime.hour * 60 + startTime.minute
+        val endMinutes = 23 * 60 + 59
+
+        dataStore.edit { prefs ->
+            if (startMinutes <= endMinutes) {
+                val weekIdForSave = weekId(sessionDate)
+                val storedWeekId = prefs[KEY_WEEK_ID]
+                if (storedWeekId != null && storedWeekId != weekIdForSave) {
+                    clearWeekEntries(prefs)
+                }
+                prefs[KEY_WEEK_ID] = weekIdForSave
+                prefs[startKey(sessionDate.dayOfWeek)] = startMinutes
+                prefs[endKey(sessionDate.dayOfWeek)] = endMinutes
+            }
+            clearSessionKeys(prefs)
+        }
+        return true
     }
 
     /** Increments the tick counter so Glance recomposes and picks up the new current time. */
@@ -240,23 +289,28 @@ class WorkSessionStore internal constructor(
         day: DayOfWeek,
         startMinutes: Int,
         endMinutes: Int,
-        clearWeekBeforeSave: Boolean = false
+        clearWeekBeforeSave: Boolean = false,
+        keepPreviousWeek: Boolean = false
     ) {
         requireWorkDay(day)
         requireMinutesSinceMidnight(startMinutes)
         requireMinutesSinceMidnight(endMinutes)
         require(startMinutes <= endMinutes) { "Start time must not be after end time" }
+        require(!clearWeekBeforeSave || !keepPreviousWeek) {
+            "clearWeekBeforeSave and keepPreviousWeek are mutually exclusive"
+        }
         dataStore.edit { prefs ->
-            rollOverWeekIfNeeded(prefs)
-            if (clearWeekBeforeSave) {
-                clearWeekEntries(prefs)
+            val currentWeekId = currentWeekId()
+            val storedWeekId = prefs[KEY_WEEK_ID]
+            val weekChanged = storedWeekId != null && storedWeekId != currentWeekId
+            when {
+                clearWeekBeforeSave -> clearWeekEntries(prefs)
+                weekChanged && !keepPreviousWeek -> clearWeekEntries(prefs)
             }
+            prefs[KEY_WEEK_ID] = currentWeekId
             prefs[startKey(day)] = startMinutes
             prefs[endKey(day)] = endMinutes
-            prefs[KEY_START_TIME] = -1L
-            prefs[KEY_IS_RUNNING] = false
-            prefs[KEY_SESSION_DATE] = ""
-            prefs[KEY_TICK_COUNT] = 0L
+            clearSessionKeys(prefs)
         }
     }
 
@@ -290,6 +344,13 @@ class WorkSessionStore internal constructor(
             prefs.remove(startKey(day))
             prefs.remove(endKey(day))
         }
+    }
+
+    private fun clearSessionKeys(prefs: androidx.datastore.preferences.core.MutablePreferences) {
+        prefs[KEY_START_TIME] = -1L
+        prefs[KEY_IS_RUNNING] = false
+        prefs[KEY_SESSION_DATE] = ""
+        prefs[KEY_TICK_COUNT] = 0L
     }
 
     private fun currentWeekId(): String {

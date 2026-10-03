@@ -3,6 +3,8 @@ package de.worktime.data
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -138,6 +140,112 @@ class WorkSessionStoreTest {
         assertEquals(9 * 60, entries.getValue(DayOfWeek.MONDAY).startMinutes)
         assertFalse(entries.getValue(DayOfWeek.FRIDAY).hasValue)
         assertFalse(store.session.first().isRunning)
+    }
+
+    @Test
+    fun `previous week entries are detected while hidden from weekEntries`() = runTest {
+        var today = LocalDate.of(2026, 9, 11) // Friday
+        val store = createStore { today }
+        store.updateWeekStart(DayOfWeek.FRIDAY, 8 * 60)
+        store.updateWeekEnd(DayOfWeek.FRIDAY, 16 * 60)
+
+        today = LocalDate.of(2026, 9, 14) // next Monday
+
+        assertTrue(store.hasPreviousWeekEntries.first())
+        assertTrue(store.weekEntries.first().values.none { entry -> entry.hasValue })
+    }
+
+    @Test
+    fun `saving monday can keep previous week entries`() = runTest {
+        var today = LocalDate.of(2026, 9, 11) // Friday
+        val store = createStore { today }
+        store.updateWeekStart(DayOfWeek.FRIDAY, 8 * 60)
+        store.updateWeekEnd(DayOfWeek.FRIDAY, 16 * 60)
+
+        today = LocalDate.of(2026, 9, 14) // next Monday
+        store.saveDayAndResetSession(
+            day = DayOfWeek.MONDAY,
+            startMinutes = 9 * 60,
+            endMinutes = 17 * 60,
+            keepPreviousWeek = true
+        )
+
+        val entries = store.weekEntries.first()
+        assertEquals(9 * 60, entries.getValue(DayOfWeek.MONDAY).startMinutes)
+        assertEquals(8 * 60, entries.getValue(DayOfWeek.FRIDAY).startMinutes)
+        assertEquals(16 * 60, entries.getValue(DayOfWeek.FRIDAY).endMinutes)
+        assertFalse(store.hasPreviousWeekEntries.first())
+    }
+
+    @Test
+    fun `saving monday clears previous week by default on rollover`() = runTest {
+        var today = LocalDate.of(2026, 9, 11) // Friday
+        val store = createStore { today }
+        store.updateWeekStart(DayOfWeek.FRIDAY, 8 * 60)
+        store.updateWeekEnd(DayOfWeek.FRIDAY, 16 * 60)
+
+        today = LocalDate.of(2026, 9, 14) // next Monday
+        store.saveDayAndResetSession(DayOfWeek.MONDAY, 9 * 60, 17 * 60)
+
+        val entries = store.weekEntries.first()
+        assertEquals(9 * 60, entries.getValue(DayOfWeek.MONDAY).startMinutes)
+        assertFalse(entries.getValue(DayOfWeek.FRIDAY).hasValue)
+        assertFalse(store.hasPreviousWeekEntries.first())
+    }
+
+    @Test
+    fun `finalize stale session saves end of day into the week store`() = runTest {
+        var today = LocalDate.of(2026, 9, 11) // Friday
+        val store = createStore { today }
+        val startMillis = today.atTime(LocalTime.of(9, 0))
+            .atZone(ZoneId.systemDefault())
+            .toInstant()
+            .toEpochMilli()
+        store.startSession(startMillis)
+
+        today = LocalDate.of(2026, 9, 12) // Saturday
+        assertTrue(store.finalizeStaleSessionIfNeeded())
+
+        val session = store.session.first()
+        val friday = store.weekEntries.first().getValue(DayOfWeek.FRIDAY)
+        assertFalse(session.isRunning)
+        assertEquals(-1L, session.startTimeMillis)
+        assertEquals(9 * 60, friday.startMinutes)
+        assertEquals(23 * 60 + 59, friday.endMinutes)
+    }
+
+    @Test
+    fun `finalize stale session across week keeps prior week detectable`() = runTest {
+        var today = LocalDate.of(2026, 9, 11) // Friday
+        val store = createStore { today }
+        store.updateWeekStart(DayOfWeek.MONDAY, 8 * 60)
+        store.updateWeekEnd(DayOfWeek.MONDAY, 16 * 60)
+        val startMillis = today.atTime(LocalTime.of(9, 0))
+            .atZone(ZoneId.systemDefault())
+            .toInstant()
+            .toEpochMilli()
+        store.startSession(startMillis)
+
+        today = LocalDate.of(2026, 9, 14) // next Monday
+        assertTrue(store.finalizeStaleSessionIfNeeded())
+
+        assertTrue(store.hasPreviousWeekEntries.first())
+        assertTrue(store.weekEntries.first().values.none { entry -> entry.hasValue })
+        assertFalse(store.session.first().isRunning)
+    }
+
+    @Test
+    fun `finalize is a no-op for today's session`() = runTest {
+        val today = LocalDate.of(2026, 9, 11)
+        val store = createStore { today }
+        val startMillis = today.atTime(LocalTime.of(9, 0))
+            .atZone(ZoneId.systemDefault())
+            .toInstant()
+            .toEpochMilli()
+        store.startSession(startMillis)
+
+        assertFalse(store.finalizeStaleSessionIfNeeded())
+        assertTrue(store.session.first().isRunning)
     }
 
     @Test
