@@ -32,6 +32,7 @@ import androidx.glance.layout.padding
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import de.worktime.cancelMidnightResetAlarm
 import de.worktime.cancelTargetNotification
 import de.worktime.scheduleMidnightResetAlarm
 import de.worktime.scheduleTargetNotification
@@ -39,7 +40,9 @@ import de.worktime.data.WorkSessionStore
 import de.worktime.data.totalNetMinutes
 import de.worktime.domain.WorkTimeCalculator
 import de.worktime.ui.MainActivity
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -197,29 +200,40 @@ private fun WidgetContent(
             )
         }
     } else {
-        // Läuft: nur Zeitanzeige, zentriert
+        // Läuft: Zeitanzeige + Beenden (räumt auch die Feierabend-Notification weg)
         Column(
-            modifier = rowModifier,
+            modifier = baseModifier,
             verticalAlignment = Alignment.CenterVertically,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = WorkTimeCalculator.formatDuration(netMinutes),
-                style = TextStyle(
-                    color = GlanceTheme.colors.onSurface,
-                    fontSize = timeFontSize,
-                    fontWeight = FontWeight.Bold
-                )
-            )
-            if (breakMinutes > 0) {
+            Column(
+                modifier = GlanceModifier.clickable(
+                    actionStartActivity(openTimerIntent(context))
+                ),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Text(
-                    text = "$breakMinutes Min. Pause",
+                    text = WorkTimeCalculator.formatDuration(netMinutes),
                     style = TextStyle(
-                        color = GlanceTheme.colors.onSurfaceVariant,
-                        fontSize = breakFontSize
+                        color = GlanceTheme.colors.onSurface,
+                        fontSize = timeFontSize,
+                        fontWeight = FontWeight.Bold
                     )
                 )
+                if (breakMinutes > 0) {
+                    Text(
+                        text = "$breakMinutes Min. Pause",
+                        style = TextStyle(
+                            color = GlanceTheme.colors.onSurfaceVariant,
+                            fontSize = breakFontSize
+                        )
+                    )
+                }
             }
+            androidx.glance.Button(
+                text = "Beenden",
+                onClick = actionRunCallback<EndSessionAction>()
+            )
         }
     }
 }
@@ -244,6 +258,51 @@ class StartSessionAction : ActionCallback {
         scheduleWidgetTick(context, startTimeMillis)
         scheduleTargetNotification(context, startTimeMillis, settings, completedWeekMinutes)
         WorkTimeWidget().updateAll(context)
+    }
+}
+
+/** Beendet den Arbeitstag vom Widget und räumt Alarme + Notification auf. */
+class EndSessionAction : ActionCallback {
+    override suspend fun onAction(
+        context: Context,
+        glanceId: GlanceId,
+        parameters: ActionParameters
+    ) {
+        val store = WorkSessionStore(context)
+        if (store.finalizeStaleSessionIfNeeded()) {
+            clearSessionAlarms(context)
+            WorkTimeWidget().updateAll(context)
+            return
+        }
+
+        val session = store.session.first()
+        if (!session.isRunning || session.startTimeMillis <= 0) return
+
+        val endTimeMillis = (System.currentTimeMillis() / 60_000) * 60_000
+        val zone = ZoneId.systemDefault()
+        val startTime = Instant.ofEpochMilli(session.startTimeMillis).atZone(zone).toLocalTime()
+        val endTime = Instant.ofEpochMilli(endTimeMillis).atZone(zone).toLocalTime()
+        val startMinutes = startTime.hour * 60 + startTime.minute
+        val endMinutes = endTime.hour * 60 + endTime.minute
+        if (startMinutes > endMinutes) return
+
+        try {
+            store.saveDayAndResetSession(
+                day = LocalDate.now().dayOfWeek,
+                startMinutes = startMinutes,
+                endMinutes = endMinutes
+            )
+        } catch (_: IllegalArgumentException) {
+            return
+        }
+        clearSessionAlarms(context)
+        WorkTimeWidget().updateAll(context)
+    }
+
+    private fun clearSessionAlarms(context: Context) {
+        cancelWidgetTick(context)
+        cancelMidnightResetAlarm(context)
+        cancelTargetNotification(context)
     }
 }
 

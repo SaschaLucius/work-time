@@ -4,12 +4,19 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import androidx.core.app.NotificationManagerCompat
 import de.worktime.data.WorkSessionStore
 import de.worktime.domain.WorkTimeCalculator
 import java.time.LocalDate
 
 private const val ACTION_TARGET_NOTIFICATION = "de.worktime.TARGET_NOTIFICATION"
 private const val TARGET_NOTIFICATION_REQUEST_CODE = 2
+
+/** Shared id for the Feierabend / weekly-target status notification. */
+const val TARGET_NOTIFICATION_ID = 1001
+
+/** Backoff when the alarm fires but POST_NOTIFICATIONS is missing. */
+const val TARGET_NOTIFICATION_RETRY_DELAY_MS = 15 * 60_000L
 
 fun targetNotificationTriggerMillis(
     startTimeMillis: Long,
@@ -48,7 +55,8 @@ fun scheduleTargetNotification(
     context: Context,
     startTimeMillis: Long,
     settings: WorkSessionStore.AppSettings,
-    completedWeekMinutes: Int = 0
+    completedWeekMinutes: Int = 0,
+    notBeforeMillis: Long = 0L
 ) {
     val triggerMillis = targetNotificationTriggerMillis(
         startTimeMillis,
@@ -60,7 +68,7 @@ fun scheduleTargetNotification(
         return
     }
     val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-    val triggerAt = triggerMillis.coerceAtLeast(System.currentTimeMillis())
+    val triggerAt = maxOf(triggerMillis, System.currentTimeMillis(), notBeforeMillis)
     try {
         alarmManager.setExactAndAllowWhileIdle(
             AlarmManager.RTC_WAKEUP,
@@ -76,9 +84,11 @@ fun scheduleTargetNotification(
     }
 }
 
+/** Cancels the pending alarm and dismisses any shown target notification. */
 fun cancelTargetNotification(context: Context) {
     val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     alarmManager.cancel(targetNotificationPendingIntent(context))
+    NotificationManagerCompat.from(context).cancel(TARGET_NOTIFICATION_ID)
 }
 
 private fun targetNotificationPendingIntent(context: Context): PendingIntent {

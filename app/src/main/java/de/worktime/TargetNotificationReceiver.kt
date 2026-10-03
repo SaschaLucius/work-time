@@ -75,7 +75,17 @@ class TargetNotificationReceiver : BroadcastReceiver() {
                 context,
                 Manifest.permission.POST_NOTIFICATIONS
             ) != PackageManager.PERMISSION_GRANTED
-        ) return
+        ) {
+            // Alarm already consumed — retry later instead of dropping the reminder.
+            scheduleTargetNotification(
+                context,
+                session.startTimeMillis,
+                settings,
+                completedWeekMinutes,
+                notBeforeMillis = System.currentTimeMillis() + TARGET_NOTIFICATION_RETRY_DELAY_MS
+            )
+            return
+        }
 
         createNotificationChannel(context)
         val openAppIntent = PendingIntent.getActivity(
@@ -107,8 +117,15 @@ class TargetNotificationReceiver : BroadcastReceiver() {
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
         try {
-            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
+            NotificationManagerCompat.from(context).notify(TARGET_NOTIFICATION_ID, notification)
         } catch (_: SecurityException) {
+            scheduleTargetNotification(
+                context,
+                session.startTimeMillis,
+                settings,
+                completedWeekMinutes,
+                notBeforeMillis = System.currentTimeMillis() + TARGET_NOTIFICATION_RETRY_DELAY_MS
+            )
             return
         }
         if (weeklyReached) store.markWeeklyNotificationShown(today)
@@ -135,6 +152,5 @@ class TargetNotificationReceiver : BroadcastReceiver() {
 
     companion object {
         private const val CHANNEL_ID = "daily_target"
-        private const val NOTIFICATION_ID = 1001
     }
 }
