@@ -1,0 +1,15 @@
+---
+description: Always use JDK 21 for Gradle/Kotlin builds in this repo
+alwaysApply: true
+---
+
+# JDK 21 for builds
+
+This project must use **JDK 21**. Newer JDKs (e.g. 26) break the current Kotlin/Gradle script compiler.
+
+- Prefer `./gradlew` (it auto-selects JDK 21 via `scripts/jdk21.sh`).
+- If invoking `java`/`javac` directly, export `JAVA_HOME` from `scripts/jdk21.sh` first:
+  ```sh
+  . ./scripts/jdk21.sh && jdk21_export
+  ```
+- Override path if needed with `WORKTIME_JAVA_HOME`.

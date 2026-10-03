@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": ".cursor/hooks/session-start-jdk21.sh"
+      }
+    ],
+    "stop": [
+      {
+        "command": ".cursor/hooks/build-on-stop.sh",
+        "timeout": 600,
+        "loop_limit": 3
+      }
+    ]
+  }
+}

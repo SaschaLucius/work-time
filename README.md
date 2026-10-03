@@ -28,6 +28,8 @@ An Android app for tracking daily work hours according to German labor law (Arbe
 
 ## Building Locally
 
+This project requires **JDK 21**. `./gradlew` auto-selects it via `scripts/jdk21.sh` (Homebrew `openjdk@21` on macOS, or set `WORKTIME_JAVA_HOME`).
+
 ```bash
 ./gradlew assembleDebug
 ```

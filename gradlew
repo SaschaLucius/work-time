@@ -54,6 +54,13 @@ esac
 
 CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
 
+# Prefer JDK 21 for this project (newer JDKs break the Kotlin/Gradle toolchain).
+if [ -f "$APP_HOME/scripts/jdk21.sh" ]; then
+    # shellcheck disable=SC1091
+    . "$APP_HOME/scripts/jdk21.sh"
+    jdk21_export || true
+fi
+
 # Determine the Java command to use to start the JVM.
 if [ -n "$JAVA_HOME" ] ; then
     if [ -x "$JAVA_HOME/jre/sh/java" ] ; then
