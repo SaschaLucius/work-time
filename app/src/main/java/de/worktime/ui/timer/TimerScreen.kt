@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
@@ -122,39 +124,46 @@ fun TimerScreen(viewModel: MainViewModel) {
 
         Spacer(Modifier.height(40.dp))
 
-        // Primäre Timer-Aktion
-        Button(
-            onClick = {
-                if (state.isRunning) showEndDayDialog = true else viewModel.start()
-            },
-            modifier = Modifier
-                .fillMaxWidth(0.55f)
-                .height(52.dp)
+        Column(
+            modifier = Modifier.width(IntrinsicSize.Max),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = if (state.isRunning) "Arbeitstag beenden" else "Start",
-                style = MaterialTheme.typography.titleMedium
-            )
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        // Sekundäre Aktionen
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
-        ) {
-            OutlinedButton(
-                onClick = openStartPicker,
-                enabled = canEditStartTime
+            // Primäre Timer-Aktion
+            Button(
+                onClick = {
+                    if (state.isRunning) showEndDayDialog = true else viewModel.start()
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
             ) {
-                Text("Startzeit")
+                Text(
+                    text = if (state.isRunning) "Arbeitstag beenden" else "Start",
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    softWrap = false
+                )
             }
-            OutlinedButton(
-                onClick = { viewModel.reset() },
-                enabled = canEditStartTime || state.isRunning
+
+            Spacer(Modifier.height(16.dp))
+
+            // Sekundäre Aktionen
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
             ) {
-                Text("Zurücksetzen")
+                OutlinedButton(
+                    onClick = openStartPicker,
+                    enabled = canEditStartTime
+                ) {
+                    Text("Startzeit")
+                }
+                OutlinedButton(
+                    onClick = { viewModel.reset() },
+                    enabled = canEditStartTime || state.isRunning
+                ) {
+                    Text("Zurücksetzen")
+                }
             }
         }
 
