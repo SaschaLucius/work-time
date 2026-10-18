@@ -1,5 +1,7 @@
 package de.worktime.ui
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -11,14 +13,19 @@ import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -33,6 +40,9 @@ import de.worktime.ui.theme.ArbeitsTheme
 import de.worktime.ui.timer.TimerScreen
 import de.worktime.ui.woche.RunningDayDraft
 import de.worktime.ui.woche.WochensaldoScreen
+import de.worktime.update.ReleaseInfo
+import de.worktime.update.fetchLatestRelease
+import de.worktime.update.isNewerVersion
 import kotlinx.coroutines.flow.MutableSharedFlow
 import java.time.Instant
 import java.time.LocalDate
@@ -49,9 +59,47 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        @Suppress("DEPRECATION")
+        val currentVersion = packageManager.getPackageInfo(packageName, 0).versionName ?: "0"
         setContent {
             ArbeitsTheme {
+                var updateInfo by remember { mutableStateOf<ReleaseInfo?>(null) }
+
+                LaunchedEffect(Unit) {
+                    val release = fetchLatestRelease()
+                    if (release != null && isNewerVersion(release.tagName, currentVersion)) {
+                        updateInfo = release
+                    }
+                }
+
                 ArbeitsApp(openTimerRequests)
+
+                updateInfo?.let { release ->
+                    AlertDialog(
+                        onDismissRequest = { updateInfo = null },
+                        title = { Text("Update verfügbar") },
+                        text = {
+                            Text("Version ${release.tagName} ist verfügbar. Jetzt herunterladen?")
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    startActivity(
+                                        Intent(Intent.ACTION_VIEW, Uri.parse(release.downloadUrl)),
+                                    )
+                                    updateInfo = null
+                                },
+                            ) {
+                                Text("Herunterladen")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { updateInfo = null }) {
+                                Text("Später")
+                            }
+                        },
+                    )
+                }
             }
         }
     }
