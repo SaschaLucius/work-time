@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -16,14 +17,18 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.EventBusy
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.EventBusy
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,9 +53,11 @@ fun WochensaldoScreen(
     breakConfig: WorkTimeCalculator.BreakConfig,
     showWeekends: Boolean,
     weeklyTargetMinutes: Int,
+    dailyTargetMinutes: Int,
     onStartChange: (DayOfWeek, Int) -> Unit,
     onEndChange: (DayOfWeek, Int) -> Unit,
     onDraftStartChange: (Int) -> Unit,
+    onAbsentChange: (DayOfWeek, Boolean) -> Unit,
     onResetDay: (DayOfWeek) -> Unit,
     onResetWeek: () -> Unit
 ) {
@@ -60,7 +67,8 @@ fun WochensaldoScreen(
         runningDraft = runningDraft,
         breakConfig = breakConfig,
         showWeekends = showWeekends,
-        weeklyTargetMinutes = weeklyTargetMinutes
+        weeklyTargetMinutes = weeklyTargetMinutes,
+        dailyTargetMinutes = dailyTargetMinutes
     )
     val dayLabels = mapOf(
         DayOfWeek.MONDAY to "Mo",
@@ -107,7 +115,12 @@ fun WochensaldoScreen(
                         putExtra(Intent.EXTRA_SUBJECT, buildWeekShareSubject())
                         putExtra(
                             Intent.EXTRA_TEXT,
-                            buildWeekShareText(entries, breakConfig, weeklyTargetMinutes)
+                            buildWeekShareText(
+                                entries,
+                                breakConfig,
+                                weeklyTargetMinutes,
+                                dailyTargetMinutes
+                            )
                         )
                     }
                     context.startActivity(
@@ -130,8 +143,10 @@ fun WochensaldoScreen(
                 endMinutes = dayOverview.endMinutes,
                 netMinutes = dayOverview.netMinutes,
                 isRunningDraft = dayOverview.isRunningDraft,
+                isAbsent = dayOverview.isAbsent,
                 onStartClick = { activePicker = Pair(i, true) },
                 onEndClick = { activePicker = Pair(i, false) },
+                onAbsentClick = { onAbsentChange(day, !dayOverview.isAbsent) },
                 onResetClick = { onResetDay(day) }
             )
             if (i < overview.days.lastIndex) {
@@ -168,7 +183,7 @@ fun WochensaldoScreen(
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Text(
-                    text = if (overview.filledDays > 0) {
+                    text = if (overview.hasContent) {
                         WorkTimeCalculator.formatDuration(overview.totalMinutes)
                     } else {
                         "--:--"
@@ -183,11 +198,14 @@ fun WochensaldoScreen(
                 Spacer(Modifier.height(4.dp))
                 SummaryRow(
                     label = "Wochenziel",
-                    value = WorkTimeCalculator.formatDuration(weeklyTargetMinutes)
+                    value = WorkTimeCalculator.formatDuration(overview.targetMinutes)
                 )
+                absentSummaryLabel(overview.absentWeekdays, overview.absentDays)?.let { label ->
+                    SummaryRow(label = "Abwesend", value = label)
+                }
                 SummaryRow(
                     label = "Saldo",
-                    value = if (overview.filledDays > 0) {
+                    value = if (overview.hasContent) {
                         formatSignedDuration(overview.balanceMinutes)
                     } else {
                         "--:--"
@@ -237,7 +255,7 @@ fun WochensaldoScreen(
         AlertDialog(
             onDismissRequest = { showResetDialog = false },
             title = { Text("Woche zurücksetzen?") },
-            text = { Text("Alle Start- und Endzeiten dieser Woche werden gelöscht.") },
+            text = { Text("Alle Einträge dieser Woche werden gelöscht.") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -295,8 +313,10 @@ private fun TagZeile(
     endMinutes: Int?,
     netMinutes: Int?,
     isRunningDraft: Boolean,
+    isAbsent: Boolean,
     onStartClick: () -> Unit,
     onEndClick: () -> Unit,
+    onAbsentClick: () -> Unit,
     onResetClick: () -> Unit
 ) {
     Row(
@@ -321,41 +341,75 @@ private fun TagZeile(
                 )
             }
         }
-        OutlinedButton(
-            onClick = onStartClick,
-            modifier = Modifier.weight(1f)
-        ) {
+        if (isAbsent) {
             Text(
-                text = startMinutes?.let(::formatTime) ?: "--:--",
-                style = MaterialTheme.typography.bodyMedium
+                text = "Abwesend",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(3f),
+                color = MaterialTheme.colorScheme.primary
+            )
+        } else {
+            OutlinedButton(
+                onClick = onStartClick,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = startMinutes?.let(::formatTime) ?: "--:--",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            OutlinedButton(
+                onClick = onEndClick,
+                enabled = !isRunningDraft,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = endMinutes?.let(::formatTime) ?: "--:--",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            Text(
+                text = netMinutes?.let { WorkTimeCalculator.formatDuration(it) } ?: "",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f),
+                color = if (netMinutes != null) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        OutlinedButton(
-            onClick = onEndClick,
-            enabled = !isRunningDraft,
-            modifier = Modifier.weight(1f)
-        ) {
-            Text(
-                text = endMinutes?.let(::formatTime) ?: "--:--",
-                style = MaterialTheme.typography.bodyMedium
-            )
-        }
-        Text(
-            text = netMinutes?.let { WorkTimeCalculator.formatDuration(it) } ?: "",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.weight(1f),
-            color = if (netMinutes != null) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        IconButton(
-            onClick = onResetClick,
-            enabled = !isRunningDraft && (startMinutes != null || endMinutes != null)
-        ) {
-            Icon(
-                Icons.Default.RestartAlt,
-                contentDescription = "$label zurücksetzen"
-            )
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                IconButton(
+                    onClick = onAbsentClick,
+                    enabled = !isRunningDraft,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isAbsent) Icons.Filled.EventBusy else Icons.Outlined.EventBusy,
+                        contentDescription = if (isAbsent) {
+                            "Abwesenheit für $label aufheben"
+                        } else {
+                            "$label als abwesend markieren"
+                        },
+                        modifier = Modifier.size(20.dp),
+                        tint = if (isAbsent) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(
+                    onClick = onResetClick,
+                    enabled = !isRunningDraft &&
+                        (isAbsent || startMinutes != null || endMinutes != null),
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.Default.RestartAlt,
+                        contentDescription = "$label zurücksetzen",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
         }
     }
 }

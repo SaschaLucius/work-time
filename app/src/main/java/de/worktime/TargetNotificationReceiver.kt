@@ -13,6 +13,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import de.worktime.data.WorkSessionStore
+import de.worktime.data.adjustedWeeklyTargetMinutes
 import de.worktime.data.totalNetMinutes
 import de.worktime.domain.WorkTimeCalculator
 import de.worktime.ui.MainActivity
@@ -56,17 +57,23 @@ class TargetNotificationReceiver : BroadcastReceiver() {
             settings.breakConfig,
             excluding = today.dayOfWeek
         )
+        val weeklyTargetMinutes = entries.adjustedWeeklyTargetMinutes(
+            weeklyTargetMinutes = settings.weeklyTargetMinutes,
+            dailyTargetMinutes = settings.dailyTargetMinutes,
+            excluding = today.dayOfWeek
+        )
         val dailyReached = settings.lastNotificationDate != today.toString() &&
             netMinutes >= dailyThreshold
         val weeklyReached =
             settings.lastWeeklyNotification != WorkSessionStore.weekId(today) &&
-                completedWeekMinutes + netMinutes >= settings.weeklyTargetMinutes
+                completedWeekMinutes + netMinutes >= weeklyTargetMinutes
         if (!dailyReached && !weeklyReached) {
             scheduleTargetNotification(
                 context,
                 session.startTimeMillis,
                 settings,
-                completedWeekMinutes
+                completedWeekMinutes,
+                weeklyTargetMinutes = weeklyTargetMinutes
             )
             return
         }
@@ -82,7 +89,8 @@ class TargetNotificationReceiver : BroadcastReceiver() {
                 session.startTimeMillis,
                 settings,
                 completedWeekMinutes,
-                notBeforeMillis = System.currentTimeMillis() + TARGET_NOTIFICATION_RETRY_DELAY_MS
+                notBeforeMillis = System.currentTimeMillis() + TARGET_NOTIFICATION_RETRY_DELAY_MS,
+                weeklyTargetMinutes = weeklyTargetMinutes
             )
             return
         }
@@ -106,7 +114,7 @@ class TargetNotificationReceiver : BroadcastReceiver() {
                 if (weeklyReached) {
                     context.getString(
                         R.string.weekly_target_notification_text,
-                        WorkTimeCalculator.formatDuration(settings.weeklyTargetMinutes)
+                        WorkTimeCalculator.formatDuration(weeklyTargetMinutes)
                     )
                 } else {
                     context.getString(R.string.target_notification_text)
@@ -124,7 +132,8 @@ class TargetNotificationReceiver : BroadcastReceiver() {
                 session.startTimeMillis,
                 settings,
                 completedWeekMinutes,
-                notBeforeMillis = System.currentTimeMillis() + TARGET_NOTIFICATION_RETRY_DELAY_MS
+                notBeforeMillis = System.currentTimeMillis() + TARGET_NOTIFICATION_RETRY_DELAY_MS,
+                weeklyTargetMinutes = weeklyTargetMinutes
             )
             return
         }
@@ -134,7 +143,8 @@ class TargetNotificationReceiver : BroadcastReceiver() {
             context,
             session.startTimeMillis,
             store.settings.first(),
-            completedWeekMinutes
+            completedWeekMinutes,
+            weeklyTargetMinutes = weeklyTargetMinutes
         )
     }
 

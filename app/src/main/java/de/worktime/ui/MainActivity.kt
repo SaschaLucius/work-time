@@ -176,7 +176,13 @@ private fun ArbeitsApp(openTimerRequests: kotlinx.coroutines.flow.Flow<Unit>) {
                 .padding(innerPadding)
         ) {
             composable("timer") { TimerScreen(viewModel) }
-            composable("rechner") { RechnerScreen(state.settings.breakConfig) }
+            composable("rechner") {
+                RechnerScreen(
+                    breakConfig = state.settings.breakConfig,
+                    dailyTargetMinutes = state.settings.dailyTargetMinutes,
+                    defaultStartMinutes = state.settings.defaultStartMinutes
+                )
+            }
             composable("woche") {
                 val zoneId = ZoneId.systemDefault()
                 val now = Instant.ofEpochMilli(System.currentTimeMillis()).atZone(zoneId)
@@ -197,6 +203,7 @@ private fun ArbeitsApp(openTimerRequests: kotlinx.coroutines.flow.Flow<Unit>) {
                     breakConfig = state.settings.breakConfig,
                     showWeekends = state.settings.showWeekends,
                     weeklyTargetMinutes = state.settings.weeklyTargetMinutes,
+                    dailyTargetMinutes = state.settings.dailyTargetMinutes,
                     onStartChange = viewModel::updateWeekStart,
                     onEndChange = viewModel::updateWeekEnd,
                     onDraftStartChange = { minutes ->
@@ -207,6 +214,7 @@ private fun ArbeitsApp(openTimerRequests: kotlinx.coroutines.flow.Flow<Unit>) {
                             .toEpochMilli()
                         viewModel.adjustStartTime(startMillis)
                     },
+                    onAbsentChange = viewModel::setDayAbsent,
                     onResetDay = viewModel::resetWeekDay,
                     onResetWeek = viewModel::resetWeek
                 )
@@ -215,6 +223,7 @@ private fun ArbeitsApp(openTimerRequests: kotlinx.coroutines.flow.Flow<Unit>) {
                 SettingsScreen(
                     settings = state.settings,
                     onBreakMinutesChange = viewModel::updateBreakMinutes,
+                    onDefaultStartChange = viewModel::updateDefaultStart,
                     onDailyTargetChange = viewModel::updateDailyTarget,
                     onWeeklyTargetChange = viewModel::updateWeeklyTarget,
                     onNotificationsEnabledChange = viewModel::updateNotificationsEnabled,

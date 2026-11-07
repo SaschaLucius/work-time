@@ -37,6 +37,7 @@ class WorkSessionStore internal constructor(
         private val KEY_FIRST_BREAK_MINUTES = intPreferencesKey("first_break_minutes")
         private val KEY_SECOND_BREAK_MINUTES = intPreferencesKey("second_break_minutes")
         private val KEY_DAILY_TARGET_MINUTES = intPreferencesKey("daily_target_minutes")
+        private val KEY_DEFAULT_START_MINUTES = intPreferencesKey("default_start_minutes")
         private val KEY_WEEKLY_TARGET_MINUTES = intPreferencesKey("weekly_target_minutes")
         private val KEY_NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
         private val KEY_NOTIFICATION_OFFSET_MINUTES = intPreferencesKey("notification_offset_minutes")
@@ -58,6 +59,9 @@ class WorkSessionStore internal constructor(
 
         private fun endKey(day: DayOfWeek) =
             intPreferencesKey("${day.name.lowercase()}_end_minutes")
+
+        private fun absentKey(day: DayOfWeek) =
+            booleanPreferencesKey("${day.name.lowercase()}_absent")
     }
 
     data class WorkSession(
@@ -71,6 +75,7 @@ class WorkSessionStore internal constructor(
         val firstBreakMinutes: Int = 30,
         val secondBreakMinutes: Int = 45,
         val dailyTargetMinutes: Int = 8 * 60,
+        val defaultStartMinutes: Int = 8 * 60 + 30,
         val weeklyTargetMinutes: Int = DEFAULT_WEEKLY_TARGET_MINUTES,
         val notificationsEnabled: Boolean = false,
         val notificationOffsetMinutes: Int = 0,
@@ -84,9 +89,11 @@ class WorkSessionStore internal constructor(
 
     data class WeekEntry(
         val startMinutes: Int? = null,
-        val endMinutes: Int? = null
+        val endMinutes: Int? = null,
+        val isAbsent: Boolean = false
     ) {
-        val hasValue: Boolean get() = startMinutes != null || endMinutes != null
+        val hasValue: Boolean get() = startMinutes != null || endMinutes != null || isAbsent
+        val isFinished: Boolean get() = startMinutes != null && endMinutes != null
     }
 
     val session: Flow<WorkSession> = dataStore.data.map { prefs ->
@@ -103,6 +110,7 @@ class WorkSessionStore internal constructor(
             firstBreakMinutes = prefs[KEY_FIRST_BREAK_MINUTES] ?: 30,
             secondBreakMinutes = prefs[KEY_SECOND_BREAK_MINUTES] ?: 45,
             dailyTargetMinutes = prefs[KEY_DAILY_TARGET_MINUTES] ?: 8 * 60,
+            defaultStartMinutes = prefs[KEY_DEFAULT_START_MINUTES] ?: (8 * 60 + 30),
             weeklyTargetMinutes = prefs[KEY_WEEKLY_TARGET_MINUTES] ?: DEFAULT_WEEKLY_TARGET_MINUTES,
             notificationsEnabled = prefs[KEY_NOTIFICATIONS_ENABLED] ?: false,
             notificationOffsetMinutes = prefs[KEY_NOTIFICATION_OFFSET_MINUTES] ?: 0,
@@ -120,7 +128,8 @@ class WorkSessionStore internal constructor(
             WORK_DAYS.associateWith { day ->
                 WeekEntry(
                     startMinutes = prefs[startKey(day)],
-                    endMinutes = prefs[endKey(day)]
+                    endMinutes = prefs[endKey(day)],
+                    isAbsent = prefs[absentKey(day)] ?: false
                 )
             }
         }
@@ -131,7 +140,9 @@ class WorkSessionStore internal constructor(
         val storedWeekId = prefs[KEY_WEEK_ID] ?: return@map false
         if (storedWeekId == currentWeekId()) return@map false
         WORK_DAYS.any { day ->
-            prefs[startKey(day)] != null || prefs[endKey(day)] != null
+            prefs[startKey(day)] != null ||
+                prefs[endKey(day)] != null ||
+                prefs[absentKey(day)] == true
         }
     }
 
@@ -195,6 +206,7 @@ class WorkSessionStore internal constructor(
                 prefs[KEY_WEEK_ID] = weekIdForSave
                 prefs[startKey(sessionDate.dayOfWeek)] = startMinutes
                 prefs[endKey(sessionDate.dayOfWeek)] = endMinutes
+                prefs.remove(absentKey(sessionDate.dayOfWeek))
             }
             clearSessionKeys(prefs)
         }
@@ -217,6 +229,11 @@ class WorkSessionStore internal constructor(
             prefs[KEY_FIRST_BREAK_MINUTES] = firstBreakMinutes
             prefs[KEY_SECOND_BREAK_MINUTES] = secondBreakMinutes
         }
+    }
+
+    suspend fun updateDefaultStart(minutes: Int) {
+        requireMinutesSinceMidnight(minutes)
+        dataStore.edit { prefs -> prefs[KEY_DEFAULT_START_MINUTES] = minutes }
     }
 
     suspend fun updateDailyTarget(minutes: Int) {
@@ -282,6 +299,19 @@ class WorkSessionStore internal constructor(
         dataStore.edit { prefs ->
             prefs.remove(startKey(day))
             prefs.remove(endKey(day))
+            prefs.remove(absentKey(day))
+        }
+    }
+
+    suspend fun setDayAbsent(day: DayOfWeek, absent: Boolean) {
+        requireWorkDay(day)
+        dataStore.edit { prefs ->
+            rollOverWeekIfNeeded(prefs)
+            if (absent) {
+                prefs[absentKey(day)] = true
+            } else {
+                prefs.remove(absentKey(day))
+            }
         }
     }
 
@@ -310,6 +340,7 @@ class WorkSessionStore internal constructor(
             prefs[KEY_WEEK_ID] = currentWeekId
             prefs[startKey(day)] = startMinutes
             prefs[endKey(day)] = endMinutes
+            prefs.remove(absentKey(day))
             clearSessionKeys(prefs)
         }
     }
@@ -326,7 +357,12 @@ class WorkSessionStore internal constructor(
                     "Start time must not be after end time"
                 }
             }
-            if (minutes == null) prefs.remove(key) else prefs[key] = minutes
+            if (minutes == null) {
+                prefs.remove(key)
+            } else {
+                prefs[key] = minutes
+                prefs.remove(absentKey(day))
+            }
         }
     }
 
@@ -343,6 +379,7 @@ class WorkSessionStore internal constructor(
         WORK_DAYS.forEach { day ->
             prefs.remove(startKey(day))
             prefs.remove(endKey(day))
+            prefs.remove(absentKey(day))
         }
     }
 

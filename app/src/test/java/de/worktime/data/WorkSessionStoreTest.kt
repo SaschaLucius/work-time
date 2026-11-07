@@ -30,6 +30,7 @@ class WorkSessionStoreTest {
         assertEquals(WorkSessionStore.AppSettings(), store.settings.first())
 
         store.updateBreakMinutes(20, 50)
+        store.updateDefaultStart(9 * 60)
         store.updateDailyTarget(7 * 60)
         store.updateWeeklyTarget(37 * 60 + 30)
         store.updateNotificationsEnabled(true)
@@ -44,6 +45,7 @@ class WorkSessionStoreTest {
                 firstBreakMinutes = 20,
                 secondBreakMinutes = 50,
                 dailyTargetMinutes = 7 * 60,
+                defaultStartMinutes = 9 * 60,
                 weeklyTargetMinutes = 37 * 60 + 30,
                 notificationsEnabled = true,
                 notificationOffsetMinutes = 15,
@@ -70,9 +72,51 @@ class WorkSessionStoreTest {
         val store = createStore()
 
         assertIllegalArgument { store.updateBreakMinutes(45, 30) }
+        assertIllegalArgument { store.updateDefaultStart(-1) }
         assertIllegalArgument { store.updateDailyTarget(0) }
         assertIllegalArgument { store.updateWeeklyTarget(0) }
         assertIllegalArgument { store.updateNotificationOffset(-1) }
+    }
+
+    @Test
+    fun `absence is stored cleared and dropped when the day is worked`() = runTest {
+        val store = createStore()
+        store.setDayAbsent(DayOfWeek.WEDNESDAY, true)
+        store.setDayAbsent(DayOfWeek.SATURDAY, true)
+
+        val marked = store.weekEntries.first()
+        assertTrue(marked.getValue(DayOfWeek.WEDNESDAY).isAbsent)
+        assertTrue(marked.getValue(DayOfWeek.SATURDAY).isAbsent)
+        assertFalse(marked.getValue(DayOfWeek.THURSDAY).isAbsent)
+
+        store.setDayAbsent(DayOfWeek.SATURDAY, false)
+        assertFalse(store.weekEntries.first().getValue(DayOfWeek.SATURDAY).isAbsent)
+
+        store.updateWeekStart(DayOfWeek.WEDNESDAY, 9 * 60)
+        assertFalse(store.weekEntries.first().getValue(DayOfWeek.WEDNESDAY).isAbsent)
+        assertEquals(9 * 60, store.weekEntries.first().getValue(DayOfWeek.WEDNESDAY).startMinutes)
+
+        store.setDayAbsent(DayOfWeek.THURSDAY, true)
+        store.resetWeekDay(DayOfWeek.THURSDAY)
+        assertFalse(store.weekEntries.first().getValue(DayOfWeek.THURSDAY).hasValue)
+
+        store.setDayAbsent(DayOfWeek.FRIDAY, true)
+        store.saveDayAndResetSession(DayOfWeek.FRIDAY, 8 * 60, 16 * 60)
+        val friday = store.weekEntries.first().getValue(DayOfWeek.FRIDAY)
+        assertFalse(friday.isAbsent)
+        assertEquals(8 * 60, friday.startMinutes)
+    }
+
+    @Test
+    fun `absence from the previous week stays detectable`() = runTest {
+        var today = LocalDate.of(2026, 9, 11)
+        val store = createStore { today }
+        store.setDayAbsent(DayOfWeek.MONDAY, true)
+
+        today = LocalDate.of(2026, 9, 14)
+
+        assertTrue(store.hasPreviousWeekEntries.first())
+        assertTrue(store.weekEntries.first().values.none { entry -> entry.hasValue })
     }
 
     @Test

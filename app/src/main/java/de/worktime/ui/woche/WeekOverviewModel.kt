@@ -17,7 +17,8 @@ data class WeekOverviewDay(
     val startMinutes: Int?,
     val endMinutes: Int?,
     val netMinutes: Int?,
-    val isRunningDraft: Boolean
+    val isRunningDraft: Boolean,
+    val isAbsent: Boolean
 )
 
 data class WeekOverviewModel(
@@ -25,15 +26,21 @@ data class WeekOverviewModel(
     val totalMinutes: Int,
     val balanceMinutes: Int,
     val filledDays: Int,
-    val isProvisional: Boolean
-)
+    val isProvisional: Boolean,
+    val absentDays: Int,
+    val absentWeekdays: Int,
+    val targetMinutes: Int
+) {
+    val hasContent: Boolean get() = filledDays > 0 || absentDays > 0
+}
 
 fun buildWeekOverviewModel(
     entries: Map<DayOfWeek, WorkSessionStore.WeekEntry>,
     runningDraft: RunningDayDraft?,
     breakConfig: WorkTimeCalculator.BreakConfig,
     showWeekends: Boolean,
-    weeklyTargetMinutes: Int
+    weeklyTargetMinutes: Int,
+    dailyTargetMinutes: Int
 ): WeekOverviewModel {
     val workDays = WorkSessionStore.WORK_DAYS.take(5)
     val weekendDays = WorkSessionStore.WORK_DAYS.drop(5)
@@ -49,7 +56,8 @@ fun buildWeekOverviewModel(
                 startMinutes = runningDraft.startMinutes,
                 endMinutes = runningDraft.endMinutes,
                 netMinutes = runningDraft.netMinutes,
-                isRunningDraft = true
+                isRunningDraft = true,
+                isAbsent = false
             )
         } else {
             val entry = entries[day] ?: WorkSessionStore.WeekEntry()
@@ -58,18 +66,28 @@ fun buildWeekOverviewModel(
                 startMinutes = entry.startMinutes,
                 endMinutes = entry.endMinutes,
                 netMinutes = entry.netMinutes(breakConfig),
-                isRunningDraft = false
+                isRunningDraft = false,
+                isAbsent = entry.isAbsent
             )
         }
     }
     val filledDays = days.count { day -> day.netMinutes != null }
     val totalMinutes = days.sumOf { day -> day.netMinutes ?: 0 }
+    val absentDays = days.count { day -> day.isAbsent }
+    val absentWeekdays = days.count { day ->
+        day.isAbsent && day.day.value < DayOfWeek.SATURDAY.value
+    }
+    val targetMinutes =
+        (weeklyTargetMinutes - absentWeekdays * dailyTargetMinutes).coerceAtLeast(0)
 
     return WeekOverviewModel(
         days = days,
         totalMinutes = totalMinutes,
-        balanceMinutes = totalMinutes - weeklyTargetMinutes,
+        balanceMinutes = totalMinutes - targetMinutes,
         filledDays = filledDays,
-        isProvisional = runningDraft != null
+        isProvisional = runningDraft != null,
+        absentDays = absentDays,
+        absentWeekdays = absentWeekdays,
+        targetMinutes = targetMinutes
     )
 }

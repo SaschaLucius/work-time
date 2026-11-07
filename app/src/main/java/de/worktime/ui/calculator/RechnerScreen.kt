@@ -24,6 +24,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -70,11 +71,39 @@ private val BreakListSaver = listSaver<MutableList<BreakUiEntry>, List<Int>>(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RechnerScreen(breakConfig: WorkTimeCalculator.BreakConfig) {
-    var startHour by rememberSaveable { mutableIntStateOf(8) }
-    var startMinute by rememberSaveable { mutableIntStateOf(30) }
-    var endHour by rememberSaveable { mutableIntStateOf(17) }
-    var endMinute by rememberSaveable { mutableIntStateOf(0) }
+fun RechnerScreen(
+    breakConfig: WorkTimeCalculator.BreakConfig,
+    dailyTargetMinutes: Int,
+    defaultStartMinutes: Int
+) {
+    var startOverridden by rememberSaveable { mutableStateOf(false) }
+    var endOverridden by rememberSaveable { mutableStateOf(false) }
+    var startHour by rememberSaveable { mutableIntStateOf(defaultStartMinutes / 60) }
+    var startMinute by rememberSaveable { mutableIntStateOf(defaultStartMinutes % 60) }
+    val initialEnd = WorkTimeCalculator.endMinutesForDailyTarget(
+        startMinutes = defaultStartMinutes,
+        dailyTargetMinutes = dailyTargetMinutes,
+        breakConfig = breakConfig
+    )
+    var endHour by rememberSaveable { mutableIntStateOf(initialEnd / 60) }
+    var endMinute by rememberSaveable { mutableIntStateOf(initialEnd % 60) }
+
+    LaunchedEffect(defaultStartMinutes, dailyTargetMinutes, breakConfig) {
+        val start = if (startOverridden) startHour * 60 + startMinute else defaultStartMinutes
+        if (!startOverridden) {
+            startHour = defaultStartMinutes / 60
+            startMinute = defaultStartMinutes % 60
+        }
+        if (!endOverridden) {
+            val end = WorkTimeCalculator.endMinutesForDailyTarget(
+                startMinutes = start,
+                dailyTargetMinutes = dailyTargetMinutes,
+                breakConfig = breakConfig
+            )
+            endHour = end / 60
+            endMinute = end % 60
+        }
+    }
     val breaks = rememberSaveable(saver = BreakListSaver) { mutableListOf<BreakUiEntry>().toMutableStateList() }
     var nextBreakId by rememberSaveable { mutableLongStateOf(1L) }
 
@@ -112,7 +141,7 @@ fun RechnerScreen(breakConfig: WorkTimeCalculator.BreakConfig) {
             color = MaterialTheme.colorScheme.onSurface
         )
         Text(
-            text = "Start-, Pausen- und Endzeit eingeben",
+            text = "Startzeit und Tagesziel sind vorausgefüllt",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -288,8 +317,18 @@ fun RechnerScreen(breakConfig: WorkTimeCalculator.BreakConfig) {
             initialHour = startHour,
             initialMinute = startMinute,
             onConfirm = { hour, minute ->
+                startOverridden = true
                 startHour = hour
                 startMinute = minute
+                if (!endOverridden) {
+                    val end = WorkTimeCalculator.endMinutesForDailyTarget(
+                        startMinutes = hour * 60 + minute,
+                        dailyTargetMinutes = dailyTargetMinutes,
+                        breakConfig = breakConfig
+                    )
+                    endHour = end / 60
+                    endMinute = end % 60
+                }
                 showStartPicker = false
             },
             onDismiss = { showStartPicker = false }
@@ -302,6 +341,7 @@ fun RechnerScreen(breakConfig: WorkTimeCalculator.BreakConfig) {
             initialHour = endHour,
             initialMinute = endMinute,
             onConfirm = { hour, minute ->
+                endOverridden = true
                 endHour = hour
                 endMinute = minute
                 showEndPicker = false

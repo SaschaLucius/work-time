@@ -37,9 +37,11 @@ import de.worktime.cancelTargetNotification
 import de.worktime.scheduleMidnightResetAlarm
 import de.worktime.scheduleTargetNotification
 import de.worktime.data.WorkSessionStore
+import de.worktime.data.adjustedWeeklyTargetMinutes
 import de.worktime.data.totalNetMinutes
 import de.worktime.domain.WorkTimeCalculator
 import de.worktime.ui.MainActivity
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -114,15 +116,19 @@ class WorkTimeWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val store = WorkSessionStore(context)
+        val initialSession = store.session.first()
+        val initialSettings = store.settings.first()
+        val initialWeekEntries = store.weekEntries.first()
         provideContent {
-            val session by store.session.collectAsState(
-                initial = null
-            )
-            val settings by store.settings.collectAsState(
-                initial = WorkSessionStore.AppSettings()
-            )
+            val session by store.session.collectAsState(initial = initialSession)
+            val settings by store.settings.collectAsState(initial = initialSettings)
+            val weekEntries by store.weekEntries.collectAsState(initial = initialWeekEntries)
             GlanceTheme {
-                WidgetContent(session = session, settings = settings)
+                WidgetContent(
+                    session = session,
+                    settings = settings,
+                    weekEntries = weekEntries
+                )
             }
         }
     }
@@ -130,18 +136,19 @@ class WorkTimeWidget : GlanceAppWidget() {
 
 @androidx.compose.runtime.Composable
 private fun WidgetContent(
-    session: WorkSessionStore.WorkSession?,
-    settings: WorkSessionStore.AppSettings
+    session: WorkSessionStore.WorkSession,
+    settings: WorkSessionStore.AppSettings,
+    weekEntries: Map<DayOfWeek, WorkSessionStore.WeekEntry>
 ) {
     val size = LocalSize.current
     val widgetWidth = size.width.value
     val widgetHeight = size.height.value
 
-    // null = still loading from DataStore; treat the same as running-but-unknown
-    // to avoid flashing the Start button before the real state arrives.
     // Stale (non-today) sessions must not keep counting until finalize runs.
-    val isTodaySession = session?.sessionDate == LocalDate.now().toString()
-    val isRunning = session?.isRunning == true &&
+    val today = LocalDate.now().dayOfWeek
+    val todayEntry = weekEntries[today]
+    val isTodaySession = session.sessionDate == LocalDate.now().toString()
+    val isRunning = session.isRunning &&
         session.startTimeMillis > 0 &&
         isTodaySession
     val grossMinutes = if (isRunning) {
@@ -160,6 +167,8 @@ private fun WidgetContent(
     val timeFontSize = minOf(widgetWidth * 0.22f, widgetHeight * timeHeightFactor)
         .coerceIn(20f, 96f).sp
     val breakFontSize = (widgetWidth * 0.07f).coerceIn(9f, 16f).sp
+    val statusFontSize = minOf(widgetWidth * 0.11f, widgetHeight * 0.38f)
+        .coerceIn(14f, 32f).sp
 
     val baseModifier = GlanceModifier
         .fillMaxSize()
@@ -171,22 +180,10 @@ private fun WidgetContent(
         actionStartActivity(openTimerIntent(context))
     )
 
-    if (session == null) {
-        // Still loading: show neutral placeholder so Start button never flashes
-        Row(
-            modifier = rowModifier,
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "--:--",
-                style = TextStyle(
-                    color = GlanceTheme.colors.onSurfaceVariant,
-                    fontSize = timeFontSize,
-                    fontWeight = FontWeight.Bold
-                )
-            )
-        }
+    if (!isRunning && todayEntry?.isAbsent == true) {
+        ClosedDayLabel(text = "Abwesend", fontSize = statusFontSize)
+    } else if (!isRunning && todayEntry?.isFinished == true) {
+        ClosedDayLabel(text = "Feierabend", fontSize = statusFontSize)
     } else if (!isRunning) {
         // Nicht gestartet: nur Start-Button zentriert
         Row(
@@ -238,6 +235,29 @@ private fun WidgetContent(
     }
 }
 
+@androidx.compose.runtime.Composable
+private fun ClosedDayLabel(text: String, fontSize: androidx.compose.ui.unit.TextUnit) {
+    val context = LocalContext.current
+    Row(
+        modifier = GlanceModifier
+            .fillMaxSize()
+            .background(GlanceTheme.colors.surface)
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .clickable(actionStartActivity(openTimerIntent(context))),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = text,
+            style = TextStyle(
+                color = GlanceTheme.colors.onSurface,
+                fontSize = fontSize,
+                fontWeight = FontWeight.Medium
+            )
+        )
+    }
+}
+
 /** Wird ausgeführt, wenn der Widget-Start-Button gedrückt wird. */
 class StartSessionAction : ActionCallback {
     override suspend fun onAction(
@@ -245,18 +265,35 @@ class StartSessionAction : ActionCallback {
         glanceId: GlanceId,
         parameters: ActionParameters
     ) {
-        val startTimeMillis = (System.currentTimeMillis() / 60_000) * 60_000
         val store = WorkSessionStore(context)
         store.finalizeStaleSessionIfNeeded()
+        val todayEntry = store.weekEntries.first()[LocalDate.now().dayOfWeek]
+        if (todayEntry?.isAbsent == true || todayEntry?.isFinished == true) {
+            WorkTimeWidget().updateAll(context)
+            return
+        }
+        val startTimeMillis = (System.currentTimeMillis() / 60_000) * 60_000
         store.startSession(startTimeMillis)
         val settings = store.settings.first()
-        val completedWeekMinutes = store.weekEntries.first().totalNetMinutes(
+        val today = LocalDate.now().dayOfWeek
+        val entries = store.weekEntries.first()
+        val completedWeekMinutes = entries.totalNetMinutes(
             settings.breakConfig,
-            excluding = LocalDate.now().dayOfWeek
+            excluding = today
         )
         scheduleMidnightResetAlarm(context)
         scheduleWidgetTick(context, startTimeMillis)
-        scheduleTargetNotification(context, startTimeMillis, settings, completedWeekMinutes)
+        scheduleTargetNotification(
+            context,
+            startTimeMillis,
+            settings,
+            completedWeekMinutes,
+            weeklyTargetMinutes = entries.adjustedWeeklyTargetMinutes(
+                weeklyTargetMinutes = settings.weeklyTargetMinutes,
+                dailyTargetMinutes = settings.dailyTargetMinutes,
+                excluding = today
+            )
+        )
         WorkTimeWidget().updateAll(context)
     }
 }

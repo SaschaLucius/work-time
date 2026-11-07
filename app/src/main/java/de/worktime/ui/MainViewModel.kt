@@ -9,6 +9,7 @@ import de.worktime.cancelTargetNotification
 import de.worktime.scheduleMidnightResetAlarm
 import de.worktime.scheduleTargetNotification
 import de.worktime.data.WorkSessionStore
+import de.worktime.data.adjustedWeeklyTargetMinutes
 import de.worktime.data.totalNetMinutes
 import de.worktime.domain.WorkTimeCalculator
 import de.worktime.widget.WorkTimeWidget
@@ -73,7 +74,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         getApplication(),
                         session.startTimeMillis,
                         _state.value.settings,
-                        completedWeekMinutes()
+                        completedWeekMinutes(),
+                        weeklyTargetMinutes = effectiveWeeklyTargetMinutes()
                     )
                 } else if (!session.isRunning && session.startTimeMillis > 0 &&
                     (currentState.isRunning || currentState.startTimeMillis != session.startTimeMillis)
@@ -115,7 +117,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         getApplication(),
                         startTimeMillis,
                         settings,
-                        completedWeekMinutes()
+                        completedWeekMinutes(),
+                        weeklyTargetMinutes = effectiveWeeklyTargetMinutes()
                     )
                 } else {
                     cancelTargetNotification(getApplication())
@@ -131,7 +134,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         getApplication(),
                         _state.value.startTimeMillis,
                         _state.value.settings,
-                        completedWeekMinutes()
+                        completedWeekMinutes(),
+                        weeklyTargetMinutes = effectiveWeeklyTargetMinutes()
                     )
                 }
             }
@@ -155,7 +159,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 getApplication(),
                 now,
                 _state.value.settings,
-                completedWeekMinutes()
+                completedWeekMinutes(),
+                weeklyTargetMinutes = effectiveWeeklyTargetMinutes()
             )
             WorkTimeWidget().updateAll(getApplication())
         }
@@ -202,7 +207,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     getApplication(),
                     newStartMillis,
                     _state.value.settings,
-                    completedWeekMinutes()
+                    completedWeekMinutes(),
+                    weeklyTargetMinutes = effectiveWeeklyTargetMinutes()
                 )
             }
         }
@@ -211,6 +217,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun updateBreakMinutes(firstBreakMinutes: Int, secondBreakMinutes: Int) {
         viewModelScope.launch {
             store.updateBreakMinutes(firstBreakMinutes, secondBreakMinutes)
+        }
+    }
+
+    fun updateDefaultStart(minutes: Int) {
+        viewModelScope.launch {
+            store.updateDefaultStart(minutes)
         }
     }
 
@@ -239,19 +251,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun updateWeekStart(day: DayOfWeek, minutes: Int) {
-        viewModelScope.launch { store.updateWeekStart(day, minutes) }
+        viewModelScope.launch {
+            store.updateWeekStart(day, minutes)
+            refreshWidget()
+        }
     }
 
     fun updateWeekEnd(day: DayOfWeek, minutes: Int) {
-        viewModelScope.launch { store.updateWeekEnd(day, minutes) }
+        viewModelScope.launch {
+            store.updateWeekEnd(day, minutes)
+            refreshWidget()
+        }
     }
 
     fun resetWeek() {
-        viewModelScope.launch { store.resetWeek() }
+        viewModelScope.launch {
+            store.resetWeek()
+            refreshWidget()
+        }
     }
 
     fun resetWeekDay(day: DayOfWeek) {
-        viewModelScope.launch { store.resetWeekDay(day) }
+        viewModelScope.launch {
+            store.resetWeekDay(day)
+            refreshWidget()
+        }
+    }
+
+    fun setDayAbsent(day: DayOfWeek, absent: Boolean) {
+        viewModelScope.launch {
+            store.setDayAbsent(day, absent)
+            refreshWidget()
+        }
     }
 
     fun endDay(
@@ -347,6 +378,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             state.settings.breakConfig,
             excluding = today.dayOfWeek
         )
+    }
+
+    private fun effectiveWeeklyTargetMinutes(today: LocalDate = LocalDate.now()): Int {
+        val state = _state.value
+        return state.weekEntries.adjustedWeeklyTargetMinutes(
+            weeklyTargetMinutes = state.settings.weeklyTargetMinutes,
+            dailyTargetMinutes = state.settings.dailyTargetMinutes,
+            excluding = if (state.isRunning) today.dayOfWeek else null
+        )
+    }
+
+    private suspend fun refreshWidget() {
+        WorkTimeWidget().updateAll(getApplication())
     }
 
 }

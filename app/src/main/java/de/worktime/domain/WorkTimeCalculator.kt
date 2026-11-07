@@ -93,6 +93,21 @@ object WorkTimeCalculator {
         return startTimeMillis + grossMinutes * 60_000L
     }
 
+    /**
+     * Endzeit (Minuten seit Mitternacht) für eine geplante Schicht:
+     * Startzeit plus die Brutto-Dauer, die das Netto-Tagesziel erreicht.
+     * Bleibt am selben Tag und endet spätestens um 23:59.
+     */
+    fun endMinutesForDailyTarget(
+        startMinutes: Int,
+        dailyTargetMinutes: Int,
+        breakConfig: BreakConfig = BreakConfig()
+    ): Int {
+        val grossMinutes = grossMinutesToReachNetTarget(dailyTargetMinutes, breakConfig)
+        val latest = 24 * 60 - 1
+        return (startMinutes + grossMinutes).coerceIn(startMinutes.coerceAtMost(latest), latest)
+    }
+
     /** Formatiert Minuten als „HH:MM". */
     fun formatDuration(minutes: Int): String {
         val m = minutes.coerceAtLeast(0)

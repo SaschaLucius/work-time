@@ -20,6 +20,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,12 +35,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import de.worktime.data.WorkSessionStore
 import de.worktime.domain.WorkTimeCalculator
+import de.worktime.ui.common.ZeitPickerDialog
 import androidx.core.content.ContextCompat
 
 @Composable
 fun SettingsScreen(
     settings: WorkSessionStore.AppSettings,
     onBreakMinutesChange: (first: Int, second: Int) -> Unit,
+    onDefaultStartChange: (minutes: Int) -> Unit,
     onDailyTargetChange: (minutes: Int) -> Unit,
     onWeeklyTargetChange: (minutes: Int) -> Unit,
     onNotificationsEnabledChange: (Boolean) -> Unit,
@@ -48,6 +51,7 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     var permissionDenied by rememberSaveable { mutableStateOf(false) }
+    var showStartPicker by rememberSaveable { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -68,6 +72,25 @@ fun SettingsScreen(
         )
 
         SettingsSection(title = "Arbeitszeit") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Startzeit",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f)
+                )
+                OutlinedButton(onClick = { showStartPicker = true }) {
+                    Text(
+                        text = "%02d:%02d".format(
+                            settings.defaultStartMinutes / 60,
+                            settings.defaultStartMinutes % 60
+                        ),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+            }
             StepperRow(
                 label = "Tagesziel",
                 value = WorkTimeCalculator.formatDuration(settings.dailyTargetMinutes),
@@ -219,6 +242,19 @@ fun SettingsScreen(
                 )
             }
         }
+    }
+
+    if (showStartPicker) {
+        ZeitPickerDialog(
+            title = "Startzeit",
+            initialHour = settings.defaultStartMinutes / 60,
+            initialMinute = settings.defaultStartMinutes % 60,
+            onConfirm = { hour, minute ->
+                showStartPicker = false
+                onDefaultStartChange(hour * 60 + minute)
+            },
+            onDismiss = { showStartPicker = false }
+        )
     }
 }
 

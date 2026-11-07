@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import de.worktime.data.adjustedWeeklyTargetMinutes
 import de.worktime.data.totalNetMinutes
 import de.worktime.domain.WorkTimeCalculator
 import de.worktime.ui.MainViewModel
@@ -178,9 +179,14 @@ fun TimerScreen(viewModel: MainViewModel) {
                 breakConfig = breakConfig,
                 excluding = currentDay
             )
+            val weeklyTargetMinutes = state.weekEntries.adjustedWeeklyTargetMinutes(
+                weeklyTargetMinutes = state.settings.weeklyTargetMinutes,
+                dailyTargetMinutes = state.settings.dailyTargetMinutes,
+                excluding = if (state.isRunning) currentDay else null
+            )
             val wochenendeMillis = WorkTimeCalculator.wochenendeMillis(
                 startTimeMillis = state.startTimeMillis,
-                weeklyTargetMinutes = state.settings.weeklyTargetMinutes,
+                weeklyTargetMinutes = weeklyTargetMinutes,
                 completedWeekMinutes = completedWeekMinutes,
                 breakConfig = breakConfig
             )

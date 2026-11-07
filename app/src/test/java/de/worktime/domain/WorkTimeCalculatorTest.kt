@@ -58,6 +58,13 @@ class WorkTimeCalculatorTest {
     }
 
     @Test
+    fun `planned end keeps the start and adds the gross daily target`() {
+        assertEquals(17 * 60, WorkTimeCalculator.endMinutesForDailyTarget(8 * 60 + 30, 8 * 60))
+        assertEquals(14 * 60 + 30, WorkTimeCalculator.endMinutesForDailyTarget(8 * 60 + 30, 6 * 60))
+        assertEquals(23 * 60 + 59, WorkTimeCalculator.endMinutesForDailyTarget(20 * 60, 8 * 60))
+    }
+
+    @Test
     fun `feierabend includes mandatory break for eight hour day`() {
         // 8 Std. Netto → 8:30 Brutto (30 Min. Pause)
         assertEquals(

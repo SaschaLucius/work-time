@@ -22,7 +22,8 @@ fun targetNotificationTriggerMillis(
     startTimeMillis: Long,
     settings: WorkSessionStore.AppSettings,
     today: LocalDate = LocalDate.now(),
-    completedWeekMinutes: Int = 0
+    completedWeekMinutes: Int = 0,
+    weeklyTargetMinutes: Int = settings.weeklyTargetMinutes
 ): Long? {
     if (!settings.notificationsEnabled) return null
 
@@ -40,7 +41,7 @@ fun targetNotificationTriggerMillis(
         settings.lastWeeklyNotification != WorkSessionStore.weekId(today)
     ) {
         val remainingNetMinutes =
-            (settings.weeklyTargetMinutes - completedWeekMinutes).coerceAtLeast(0)
+            (weeklyTargetMinutes - completedWeekMinutes).coerceAtLeast(0)
         val grossMinutes = WorkTimeCalculator.grossMinutesToReachNetTarget(
             remainingNetMinutes,
             settings.breakConfig
@@ -56,12 +57,14 @@ fun scheduleTargetNotification(
     startTimeMillis: Long,
     settings: WorkSessionStore.AppSettings,
     completedWeekMinutes: Int = 0,
-    notBeforeMillis: Long = 0L
+    notBeforeMillis: Long = 0L,
+    weeklyTargetMinutes: Int = settings.weeklyTargetMinutes
 ) {
     val triggerMillis = targetNotificationTriggerMillis(
         startTimeMillis,
         settings,
-        completedWeekMinutes = completedWeekMinutes
+        completedWeekMinutes = completedWeekMinutes,
+        weeklyTargetMinutes = weeklyTargetMinutes
     )
     if (triggerMillis == null || startTimeMillis <= 0) {
         cancelTargetNotification(context)
