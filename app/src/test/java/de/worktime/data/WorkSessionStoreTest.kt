@@ -31,40 +31,46 @@ class WorkSessionStoreTest {
 
         store.updateBreakMinutes(20, 50)
         store.updateDefaultStart(9 * 60)
-        store.updateDailyTarget(7 * 60)
-        store.updateWeeklyTarget(37 * 60 + 30)
+        store.updateWeeklyTarget(35 * 60)
+        store.updateWorkDaysPerWeek(5)
         store.updateNotificationsEnabled(true)
         store.updateNotificationOffset(15)
         val notificationDate = LocalDate.of(2026, 9, 1)
         store.markNotificationShown(notificationDate)
         store.markWeeklyNotificationShown(notificationDate)
-        store.updateShowWeekends(true)
 
+        val settings = store.settings.first()
         assertEquals(
             WorkSessionStore.AppSettings(
                 firstBreakMinutes = 20,
                 secondBreakMinutes = 50,
-                dailyTargetMinutes = 7 * 60,
                 defaultStartMinutes = 9 * 60,
-                weeklyTargetMinutes = 37 * 60 + 30,
+                weeklyTargetMinutes = 35 * 60,
+                workDaysPerWeek = 5,
                 notificationsEnabled = true,
                 notificationOffsetMinutes = 15,
                 lastNotificationDate = "2026-09-01",
-                lastWeeklyNotification = "2026-36",
-                showWeekends = true
+                lastWeeklyNotification = "2026-36"
             ),
-            store.settings.first()
+            settings
         )
+        assertEquals(7 * 60, settings.dailyTargetMinutes)
+        assertFalse(settings.showWeekends)
+
+        store.updateWorkDaysPerWeek(6)
+        assertTrue(store.settings.first().showWeekends)
     }
 
     @Test
-    fun `lowering target clamps notification offset`() = runTest {
+    fun `lowering weekly target clamps notification offset`() = runTest {
         val store = createStore()
+        store.updateWorkDaysPerWeek(5)
+        store.updateWeeklyTarget(40 * 60)
         store.updateNotificationOffset(300)
 
-        store.updateDailyTarget(240)
+        store.updateWeeklyTarget(20 * 60)
 
-        assertEquals(240, store.settings.first().notificationOffsetMinutes)
+        assertEquals(4 * 60, store.settings.first().notificationOffsetMinutes)
     }
 
     @Test
@@ -73,8 +79,9 @@ class WorkSessionStoreTest {
 
         assertIllegalArgument { store.updateBreakMinutes(45, 30) }
         assertIllegalArgument { store.updateDefaultStart(-1) }
-        assertIllegalArgument { store.updateDailyTarget(0) }
         assertIllegalArgument { store.updateWeeklyTarget(0) }
+        assertIllegalArgument { store.updateWorkDaysPerWeek(0) }
+        assertIllegalArgument { store.updateWorkDaysPerWeek(8) }
         assertIllegalArgument { store.updateNotificationOffset(-1) }
     }
 

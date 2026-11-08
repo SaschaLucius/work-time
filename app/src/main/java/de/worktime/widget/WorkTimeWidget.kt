@@ -291,6 +291,7 @@ class StartSessionAction : ActionCallback {
             weeklyTargetMinutes = entries.adjustedWeeklyTargetMinutes(
                 weeklyTargetMinutes = settings.weeklyTargetMinutes,
                 dailyTargetMinutes = settings.dailyTargetMinutes,
+                workDaysPerWeek = settings.workDaysPerWeek,
                 excluding = today
             )
         )

@@ -24,9 +24,9 @@ class TargetNotificationSchedulerTest {
     @Test
     fun `default target includes the first break`() {
         val settings = WorkSessionStore.AppSettings(notificationsEnabled = true)
-
+        // Tagesziel 39:00 / 5 = 07:48 Netto → 08:18 Brutto inkl. 30 Min. Pause
         assertEquals(
-            1_000L + 510 * 60_000L,
+            1_000L + 498 * 60_000L,
             targetNotificationTriggerMillis(1_000L, settings, today)
         )
     }
@@ -39,7 +39,7 @@ class TargetNotificationSchedulerTest {
         )
 
         assertEquals(
-            1_000L + 480 * 60_000L,
+            1_000L + 468 * 60_000L,
             targetNotificationTriggerMillis(1_000L, settings, today)
         )
     }
@@ -78,7 +78,7 @@ class TargetNotificationSchedulerTest {
         )
 
         assertEquals(
-            1_000L + 510 * 60_000L,
+            1_000L + 498 * 60_000L,
             targetNotificationTriggerMillis(
                 startTimeMillis = 1_000L,
                 settings = settings,

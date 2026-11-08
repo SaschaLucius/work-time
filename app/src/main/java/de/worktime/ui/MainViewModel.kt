@@ -226,24 +226,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun updateDailyTarget(minutes: Int) {
-        viewModelScope.launch {
-            store.updateDailyTarget(minutes)
-        }
-    }
-
     fun updateWeeklyTarget(minutes: Int) {
         viewModelScope.launch {
             store.updateWeeklyTarget(minutes)
         }
     }
 
-    fun updateNotificationsEnabled(enabled: Boolean) {
-        viewModelScope.launch { store.updateNotificationsEnabled(enabled) }
+    fun updateWorkDaysPerWeek(days: Int) {
+        viewModelScope.launch {
+            store.updateWorkDaysPerWeek(days)
+        }
     }
 
-    fun updateShowWeekends(enabled: Boolean) {
-        viewModelScope.launch { store.updateShowWeekends(enabled) }
+    fun updateNotificationsEnabled(enabled: Boolean) {
+        viewModelScope.launch { store.updateNotificationsEnabled(enabled) }
     }
 
     fun updateNotificationOffset(minutes: Int) {
@@ -385,6 +381,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return state.weekEntries.adjustedWeeklyTargetMinutes(
             weeklyTargetMinutes = state.settings.weeklyTargetMinutes,
             dailyTargetMinutes = state.settings.dailyTargetMinutes,
+            workDaysPerWeek = state.settings.workDaysPerWeek,
             excluding = if (state.isRunning) today.dayOfWeek else null
         )
     }

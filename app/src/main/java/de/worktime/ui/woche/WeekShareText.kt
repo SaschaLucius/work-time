@@ -25,6 +25,7 @@ internal fun buildWeekShareText(
     breakConfig: WorkTimeCalculator.BreakConfig,
     weeklyTargetMinutes: Int,
     dailyTargetMinutes: Int,
+    workDaysPerWeek: Int = WorkSessionStore.DEFAULT_WORK_DAYS_PER_WEEK,
     today: LocalDate = LocalDate.now()
 ): String {
     val monday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
@@ -32,11 +33,12 @@ internal fun buildWeekShareText(
     val totalMinutes = entries.totalNetMinutes(breakConfig)
     val targetMinutes = entries.adjustedWeeklyTargetMinutes(
         weeklyTargetMinutes,
-        dailyTargetMinutes
+        dailyTargetMinutes,
+        workDaysPerWeek
     )
     val balanceMinutes = totalMinutes - targetMinutes
     val absentWeekdays = entries.count { (day, entry) ->
-        entry.isAbsent && day.value < DayOfWeek.SATURDAY.value
+        entry.isAbsent && WorkSessionStore.isConfiguredWorkDay(day, workDaysPerWeek)
     }
     val absentDays = entries.count { (_, entry) -> entry.isAbsent }
     val dayLines = WorkSessionStore.WORK_DAYS.mapNotNull { day ->

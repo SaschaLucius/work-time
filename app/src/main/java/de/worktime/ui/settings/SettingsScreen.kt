@@ -43,11 +43,10 @@ fun SettingsScreen(
     settings: WorkSessionStore.AppSettings,
     onBreakMinutesChange: (first: Int, second: Int) -> Unit,
     onDefaultStartChange: (minutes: Int) -> Unit,
-    onDailyTargetChange: (minutes: Int) -> Unit,
     onWeeklyTargetChange: (minutes: Int) -> Unit,
+    onWorkDaysPerWeekChange: (days: Int) -> Unit,
     onNotificationsEnabledChange: (Boolean) -> Unit,
-    onNotificationOffsetChange: (Int) -> Unit,
-    onShowWeekendsChange: (Boolean) -> Unit
+    onNotificationOffsetChange: (Int) -> Unit
 ) {
     val context = LocalContext.current
     var permissionDenied by rememberSaveable { mutableStateOf(false) }
@@ -58,6 +57,14 @@ fun SettingsScreen(
         permissionDenied = !granted
         onNotificationsEnabledChange(granted)
     }
+    val maxWeekly = WorkSessionStore.maxWeeklyTargetMinutes(settings.workDaysPerWeek)
+    val canIncreaseWorkDays = settings.workDaysPerWeek < WorkSessionStore.MAX_WORK_DAYS_PER_WEEK &&
+        settings.weeklyTargetMinutes <=
+        WorkSessionStore.maxWeeklyTargetMinutes(settings.workDaysPerWeek + 1) &&
+        WorkSessionStore.dailyTargetMinutes(
+            settings.weeklyTargetMinutes,
+            settings.workDaysPerWeek + 1
+        ) in 1..WorkTimeCalculator.MAX_NET_MINUTES
 
     Column(
         modifier = Modifier
@@ -72,6 +79,46 @@ fun SettingsScreen(
         )
 
         SettingsSection(title = "Arbeitszeit") {
+            StepperRow(
+                label = "Wochenziel",
+                value = WorkTimeCalculator.formatDuration(settings.weeklyTargetMinutes),
+                canDecrease = settings.weeklyTargetMinutes > WorkSessionStore.MIN_WEEKLY_TARGET_MINUTES &&
+                    WorkSessionStore.dailyTargetMinutes(
+                        settings.weeklyTargetMinutes - 60,
+                        settings.workDaysPerWeek
+                    ) >= 1,
+                canIncrease = settings.weeklyTargetMinutes + 60 <= maxWeekly,
+                onDecrease = {
+                    onWeeklyTargetChange(
+                        (settings.weeklyTargetMinutes - 60)
+                            .coerceAtLeast(WorkSessionStore.MIN_WEEKLY_TARGET_MINUTES)
+                    )
+                },
+                onIncrease = {
+                    onWeeklyTargetChange(
+                        (settings.weeklyTargetMinutes + 60).coerceAtMost(maxWeekly)
+                    )
+                }
+            )
+            StepperRow(
+                label = "Wochentage",
+                value = settings.workDaysPerWeek.toString(),
+                canDecrease = settings.workDaysPerWeek > 1 &&
+                    WorkSessionStore.dailyTargetMinutes(
+                        settings.weeklyTargetMinutes,
+                        settings.workDaysPerWeek - 1
+                    ) <= WorkTimeCalculator.MAX_NET_MINUTES,
+                canIncrease = canIncreaseWorkDays,
+                onDecrease = {
+                    onWorkDaysPerWeekChange((settings.workDaysPerWeek - 1).coerceAtLeast(1))
+                },
+                onIncrease = {
+                    onWorkDaysPerWeekChange(
+                        (settings.workDaysPerWeek + 1)
+                            .coerceAtMost(WorkSessionStore.MAX_WORK_DAYS_PER_WEEK)
+                    )
+                }
+            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -91,21 +138,6 @@ fun SettingsScreen(
                     )
                 }
             }
-            StepperRow(
-                label = "Tagesziel",
-                value = WorkTimeCalculator.formatDuration(settings.dailyTargetMinutes),
-                canDecrease = settings.dailyTargetMinutes > 15,
-                canIncrease = settings.dailyTargetMinutes < WorkTimeCalculator.MAX_NET_MINUTES,
-                onDecrease = {
-                    onDailyTargetChange((settings.dailyTargetMinutes - 15).coerceAtLeast(15))
-                },
-                onIncrease = {
-                    onDailyTargetChange(
-                        (settings.dailyTargetMinutes + 15)
-                            .coerceAtMost(WorkTimeCalculator.MAX_NET_MINUTES)
-                    )
-                }
-            )
         }
 
         HorizontalDivider()
@@ -147,41 +179,6 @@ fun SettingsScreen(
                     )
                 }
             )
-        }
-
-        HorizontalDivider()
-
-        SettingsSection(title = "Wochenübersicht") {
-            StepperRow(
-                label = "Wochenziel",
-                value = WorkTimeCalculator.formatDuration(settings.weeklyTargetMinutes),
-                canDecrease = settings.weeklyTargetMinutes > 15,
-                canIncrease = settings.weeklyTargetMinutes <
-                    WorkSessionStore.MAX_WEEKLY_TARGET_MINUTES,
-                onDecrease = {
-                    onWeeklyTargetChange((settings.weeklyTargetMinutes - 15).coerceAtLeast(15))
-                },
-                onIncrease = {
-                    onWeeklyTargetChange(
-                        (settings.weeklyTargetMinutes + 15)
-                            .coerceAtMost(WorkSessionStore.MAX_WEEKLY_TARGET_MINUTES)
-                    )
-                }
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Wochenende immer anzeigen",
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.weight(1f)
-                )
-                Switch(
-                    checked = settings.showWeekends,
-                    onCheckedChange = onShowWeekendsChange
-                )
-            }
         }
 
         HorizontalDivider()

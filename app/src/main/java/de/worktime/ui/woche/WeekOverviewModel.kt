@@ -38,16 +38,15 @@ fun buildWeekOverviewModel(
     entries: Map<DayOfWeek, WorkSessionStore.WeekEntry>,
     runningDraft: RunningDayDraft?,
     breakConfig: WorkTimeCalculator.BreakConfig,
-    showWeekends: Boolean,
+    workDaysPerWeek: Int,
     weeklyTargetMinutes: Int,
     dailyTargetMinutes: Int
 ): WeekOverviewModel {
-    val workDays = WorkSessionStore.WORK_DAYS.take(5)
-    val weekendDays = WorkSessionStore.WORK_DAYS.drop(5)
-    val showWeekendRows = showWeekends || weekendDays.any { day ->
+    val configuredDays = WorkSessionStore.WORK_DAYS.take(workDaysPerWeek)
+    val extraDays = WorkSessionStore.WORK_DAYS.drop(workDaysPerWeek).filter { day ->
         entries[day]?.hasValue == true || runningDraft?.day == day
     }
-    val visibleDays = if (showWeekendRows) workDays + weekendDays else workDays
+    val visibleDays = configuredDays + extraDays
 
     val days = visibleDays.map { day ->
         if (runningDraft?.day == day) {
@@ -75,7 +74,7 @@ fun buildWeekOverviewModel(
     val totalMinutes = days.sumOf { day -> day.netMinutes ?: 0 }
     val absentDays = days.count { day -> day.isAbsent }
     val absentWeekdays = days.count { day ->
-        day.isAbsent && day.day.value < DayOfWeek.SATURDAY.value
+        day.isAbsent && WorkSessionStore.isConfiguredWorkDay(day.day, workDaysPerWeek)
     }
     val targetMinutes =
         (weeklyTargetMinutes - absentWeekdays * dailyTargetMinutes).coerceAtLeast(0)

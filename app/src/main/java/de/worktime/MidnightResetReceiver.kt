@@ -96,6 +96,7 @@ class MidnightResetReceiver : BroadcastReceiver() {
                     weeklyTargetMinutes = entries.adjustedWeeklyTargetMinutes(
                         weeklyTargetMinutes = settings.weeklyTargetMinutes,
                         dailyTargetMinutes = settings.dailyTargetMinutes,
+                        workDaysPerWeek = settings.workDaysPerWeek,
                         excluding = today
                     )
                 )

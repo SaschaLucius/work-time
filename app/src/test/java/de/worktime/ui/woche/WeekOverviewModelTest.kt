@@ -21,7 +21,7 @@ class WeekOverviewModelTest {
             ),
             runningDraft = null,
             breakConfig = breakConfig,
-            showWeekends = false,
+            workDaysPerWeek = 5,
             weeklyTargetMinutes = 39 * 60,
             dailyTargetMinutes = 8 * 60
         )
@@ -45,7 +45,7 @@ class WeekOverviewModelTest {
                 netMinutes = 3 * 60
             ),
             breakConfig = breakConfig,
-            showWeekends = false,
+            workDaysPerWeek = 5,
             weeklyTargetMinutes = 10 * 60,
             dailyTargetMinutes = 8 * 60
         )
@@ -70,7 +70,7 @@ class WeekOverviewModelTest {
                 netMinutes = 2 * 60
             ),
             breakConfig = breakConfig,
-            showWeekends = false,
+            workDaysPerWeek = 5,
             weeklyTargetMinutes = 39 * 60,
             dailyTargetMinutes = 8 * 60
         )
@@ -91,13 +91,29 @@ class WeekOverviewModelTest {
                 netMinutes = 60
             ),
             breakConfig = breakConfig,
-            showWeekends = false,
+            workDaysPerWeek = 5,
             weeklyTargetMinutes = 39 * 60,
             dailyTargetMinutes = 8 * 60
         )
 
-        assertEquals(7, model.days.size)
+        assertEquals(6, model.days.size)
         assertTrue(model.days.single { it.day == DayOfWeek.SATURDAY }.isRunningDraft)
+    }
+
+    @Test
+    fun `six work days show saturday by default`() {
+        val model = buildWeekOverviewModel(
+            entries = emptyMap(),
+            runningDraft = null,
+            breakConfig = breakConfig,
+            workDaysPerWeek = 6,
+            weeklyTargetMinutes = 39 * 60,
+            dailyTargetMinutes = 6 * 60 + 30
+        )
+
+        assertEquals(6, model.days.size)
+        assertTrue(model.days.any { it.day == DayOfWeek.SATURDAY })
+        assertFalse(model.days.any { it.day == DayOfWeek.SUNDAY })
     }
 
     @Test
@@ -113,7 +129,7 @@ class WeekOverviewModelTest {
             ),
             runningDraft = null,
             breakConfig = breakConfig,
-            showWeekends = false,
+            workDaysPerWeek = 5,
             weeklyTargetMinutes = 39 * 60,
             dailyTargetMinutes = 8 * 60
         )
@@ -135,12 +151,12 @@ class WeekOverviewModelTest {
             ),
             runningDraft = null,
             breakConfig = breakConfig,
-            showWeekends = false,
+            workDaysPerWeek = 5,
             weeklyTargetMinutes = 39 * 60,
             dailyTargetMinutes = 8 * 60
         )
 
-        assertEquals(7, model.days.size)
+        assertEquals(6, model.days.size)
         assertEquals(1, model.absentDays)
         assertEquals(0, model.absentWeekdays)
         assertEquals(39 * 60, model.targetMinutes)
@@ -160,7 +176,7 @@ class WeekOverviewModelTest {
                 netMinutes = 3 * 60
             ),
             breakConfig = breakConfig,
-            showWeekends = false,
+            workDaysPerWeek = 5,
             weeklyTargetMinutes = 39 * 60,
             dailyTargetMinutes = 8 * 60
         )

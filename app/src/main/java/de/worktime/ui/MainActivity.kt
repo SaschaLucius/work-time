@@ -201,7 +201,7 @@ private fun ArbeitsApp(openTimerRequests: kotlinx.coroutines.flow.Flow<Unit>) {
                     entries = state.weekEntries,
                     runningDraft = runningDraft,
                     breakConfig = state.settings.breakConfig,
-                    showWeekends = state.settings.showWeekends,
+                    workDaysPerWeek = state.settings.workDaysPerWeek,
                     weeklyTargetMinutes = state.settings.weeklyTargetMinutes,
                     dailyTargetMinutes = state.settings.dailyTargetMinutes,
                     onStartChange = viewModel::updateWeekStart,
@@ -224,11 +224,10 @@ private fun ArbeitsApp(openTimerRequests: kotlinx.coroutines.flow.Flow<Unit>) {
                     settings = state.settings,
                     onBreakMinutesChange = viewModel::updateBreakMinutes,
                     onDefaultStartChange = viewModel::updateDefaultStart,
-                    onDailyTargetChange = viewModel::updateDailyTarget,
                     onWeeklyTargetChange = viewModel::updateWeeklyTarget,
+                    onWorkDaysPerWeekChange = viewModel::updateWorkDaysPerWeek,
                     onNotificationsEnabledChange = viewModel::updateNotificationsEnabled,
-                    onNotificationOffsetChange = viewModel::updateNotificationOffset,
-                    onShowWeekendsChange = viewModel::updateShowWeekends
+                    onNotificationOffsetChange = viewModel::updateNotificationOffset
                 )
             }
         }

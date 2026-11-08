@@ -51,7 +51,7 @@ fun WochensaldoScreen(
     entries: Map<DayOfWeek, WorkSessionStore.WeekEntry>,
     runningDraft: RunningDayDraft?,
     breakConfig: WorkTimeCalculator.BreakConfig,
-    showWeekends: Boolean,
+    workDaysPerWeek: Int,
     weeklyTargetMinutes: Int,
     dailyTargetMinutes: Int,
     onStartChange: (DayOfWeek, Int) -> Unit,
@@ -66,7 +66,7 @@ fun WochensaldoScreen(
         entries = entries,
         runningDraft = runningDraft,
         breakConfig = breakConfig,
-        showWeekends = showWeekends,
+        workDaysPerWeek = workDaysPerWeek,
         weeklyTargetMinutes = weeklyTargetMinutes,
         dailyTargetMinutes = dailyTargetMinutes
     )
@@ -119,7 +119,8 @@ fun WochensaldoScreen(
                                 entries,
                                 breakConfig,
                                 weeklyTargetMinutes,
-                                dailyTargetMinutes
+                                dailyTargetMinutes,
+                                workDaysPerWeek
                             )
                         )
                     }
