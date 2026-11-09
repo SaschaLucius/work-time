@@ -30,7 +30,7 @@ Saldo: -23:30""",
                 entries = entries,
                 breakConfig = WorkTimeCalculator.BreakConfig(),
                 weeklyTargetMinutes = 39 * 60,
-                dailyTargetMinutes = 8 * 60,
+                workDaysPerWeek = 5,
                 today = LocalDate.of(2026, 9, 11)
             )
         )
@@ -53,14 +53,14 @@ Dienstag, 08.09.2026: Abwesend
 Samstag, 12.09.2026: Abwesend
 
 Gesamt: 08:00
-Wochenziel: 31:00
+Wochenziel: 32:00
 Abwesend: 1 Werktag
-Saldo: -23:00""",
+Saldo: -24:00""",
             buildWeekShareText(
                 entries = entries,
                 breakConfig = WorkTimeCalculator.BreakConfig(),
-                weeklyTargetMinutes = 39 * 60,
-                dailyTargetMinutes = 8 * 60,
+                weeklyTargetMinutes = 40 * 60,
+                workDaysPerWeek = 5,
                 today = LocalDate.of(2026, 9, 11)
             )
         )

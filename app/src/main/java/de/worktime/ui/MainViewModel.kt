@@ -380,7 +380,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val state = _state.value
         return state.weekEntries.adjustedWeeklyTargetMinutes(
             weeklyTargetMinutes = state.settings.weeklyTargetMinutes,
-            dailyTargetMinutes = state.settings.dailyTargetMinutes,
             workDaysPerWeek = state.settings.workDaysPerWeek,
             excluding = if (state.isRunning) today.dayOfWeek else null
         )

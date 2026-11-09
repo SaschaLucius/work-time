@@ -53,7 +53,6 @@ fun WochensaldoScreen(
     breakConfig: WorkTimeCalculator.BreakConfig,
     workDaysPerWeek: Int,
     weeklyTargetMinutes: Int,
-    dailyTargetMinutes: Int,
     onStartChange: (DayOfWeek, Int) -> Unit,
     onEndChange: (DayOfWeek, Int) -> Unit,
     onDraftStartChange: (Int) -> Unit,
@@ -67,8 +66,7 @@ fun WochensaldoScreen(
         runningDraft = runningDraft,
         breakConfig = breakConfig,
         workDaysPerWeek = workDaysPerWeek,
-        weeklyTargetMinutes = weeklyTargetMinutes,
-        dailyTargetMinutes = dailyTargetMinutes
+        weeklyTargetMinutes = weeklyTargetMinutes
     )
     val dayLabels = mapOf(
         DayOfWeek.MONDAY to "Mo",
@@ -119,7 +117,6 @@ fun WochensaldoScreen(
                                 entries,
                                 breakConfig,
                                 weeklyTargetMinutes,
-                                dailyTargetMinutes,
                                 workDaysPerWeek
                             )
                         )

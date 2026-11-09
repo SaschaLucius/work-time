@@ -59,7 +59,6 @@ class TargetNotificationReceiver : BroadcastReceiver() {
         )
         val weeklyTargetMinutes = entries.adjustedWeeklyTargetMinutes(
             weeklyTargetMinutes = settings.weeklyTargetMinutes,
-            dailyTargetMinutes = settings.dailyTargetMinutes,
             workDaysPerWeek = settings.workDaysPerWeek,
             excluding = today.dayOfWeek
         )

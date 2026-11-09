@@ -1,6 +1,8 @@
 package de.worktime.ui.woche
 
 import de.worktime.data.WorkSessionStore
+import de.worktime.data.absentWorkDays
+import de.worktime.data.adjustedWeeklyTargetMinutes
 import de.worktime.data.netMinutes
 import de.worktime.domain.WorkTimeCalculator
 import java.time.DayOfWeek
@@ -39,8 +41,7 @@ fun buildWeekOverviewModel(
     runningDraft: RunningDayDraft?,
     breakConfig: WorkTimeCalculator.BreakConfig,
     workDaysPerWeek: Int,
-    weeklyTargetMinutes: Int,
-    dailyTargetMinutes: Int
+    weeklyTargetMinutes: Int
 ): WeekOverviewModel {
     val configuredDays = WorkSessionStore.WORK_DAYS.take(workDaysPerWeek)
     val extraDays = WorkSessionStore.WORK_DAYS.drop(workDaysPerWeek).filter { day ->
@@ -73,11 +74,13 @@ fun buildWeekOverviewModel(
     val filledDays = days.count { day -> day.netMinutes != null }
     val totalMinutes = days.sumOf { day -> day.netMinutes ?: 0 }
     val absentDays = days.count { day -> day.isAbsent }
-    val absentWeekdays = days.count { day ->
-        day.isAbsent && WorkSessionStore.isConfiguredWorkDay(day.day, workDaysPerWeek)
-    }
-    val targetMinutes =
-        (weeklyTargetMinutes - absentWeekdays * dailyTargetMinutes).coerceAtLeast(0)
+    // Ein laufender Tag hebt seine Abwesenheit auf.
+    val absentWeekdays = entries.absentWorkDays(workDaysPerWeek, excluding = runningDraft?.day)
+    val targetMinutes = entries.adjustedWeeklyTargetMinutes(
+        weeklyTargetMinutes,
+        workDaysPerWeek,
+        excluding = runningDraft?.day
+    )
 
     return WeekOverviewModel(
         days = days,

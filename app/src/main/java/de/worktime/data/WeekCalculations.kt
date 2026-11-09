@@ -13,22 +13,31 @@ fun WorkSessionStore.WeekEntry.netMinutes(
 }
 
 /**
- * Wochenziel abzüglich eines Tagesziels je abwesendem konfiguriertem Arbeitstag.
- * Tage außerhalb von [workDaysPerWeek] zählen nicht auf das Soll. [excluding] lässt
- * einen Tag aus, der gerade gearbeitet wird und dessen Abwesenheit damit hinfällig ist.
+ * Abwesende Tage innerhalb der konfigurierten Arbeitstage. [excluding] lässt einen Tag aus,
+ * der gerade gearbeitet wird und dessen Abwesenheit damit hinfällig ist.
+ */
+fun Map<DayOfWeek, WorkSessionStore.WeekEntry>.absentWorkDays(
+    workDaysPerWeek: Int,
+    excluding: DayOfWeek? = null
+): Int = count { (day, entry) ->
+    day != excluding &&
+        entry.isAbsent &&
+        WorkSessionStore.isConfiguredWorkDay(day, workDaysPerWeek)
+}
+
+/**
+ * Wochenziel anteilig für die anwesenden Arbeitstage, auf die nächste volle Minute
+ * aufgerundet. Eine komplett abwesende Woche ergibt damit genau 0.
  */
 fun Map<DayOfWeek, WorkSessionStore.WeekEntry>.adjustedWeeklyTargetMinutes(
     weeklyTargetMinutes: Int,
-    dailyTargetMinutes: Int,
-    workDaysPerWeek: Int = WorkSessionStore.DEFAULT_WORK_DAYS_PER_WEEK,
+    workDaysPerWeek: Int,
     excluding: DayOfWeek? = null
 ): Int {
-    val absentWeekdays = count { (day, entry) ->
-        day != excluding &&
-            entry.isAbsent &&
-            WorkSessionStore.isConfiguredWorkDay(day, workDaysPerWeek)
-    }
-    return (weeklyTargetMinutes - absentWeekdays * dailyTargetMinutes).coerceAtLeast(0)
+    val presentDays = (workDaysPerWeek - absentWorkDays(workDaysPerWeek, excluding))
+        .coerceAtLeast(0)
+    // Aufrunden ohne Math.ceilDiv (erst ab Android 14 verfügbar).
+    return (weeklyTargetMinutes * presentDays + workDaysPerWeek - 1) / workDaysPerWeek
 }
 
 fun Map<DayOfWeek, WorkSessionStore.WeekEntry>.totalNetMinutes(

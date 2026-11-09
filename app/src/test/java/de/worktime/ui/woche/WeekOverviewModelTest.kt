@@ -22,8 +22,7 @@ class WeekOverviewModelTest {
             runningDraft = null,
             breakConfig = breakConfig,
             workDaysPerWeek = 5,
-            weeklyTargetMinutes = 39 * 60,
-            dailyTargetMinutes = 8 * 60
+            weeklyTargetMinutes = 39 * 60
         )
 
         assertEquals(15 * 60 + 30, model.totalMinutes)
@@ -46,8 +45,7 @@ class WeekOverviewModelTest {
             ),
             breakConfig = breakConfig,
             workDaysPerWeek = 5,
-            weeklyTargetMinutes = 10 * 60,
-            dailyTargetMinutes = 8 * 60
+            weeklyTargetMinutes = 10 * 60
         )
 
         assertEquals(11 * 60, model.totalMinutes)
@@ -71,8 +69,7 @@ class WeekOverviewModelTest {
             ),
             breakConfig = breakConfig,
             workDaysPerWeek = 5,
-            weeklyTargetMinutes = 39 * 60,
-            dailyTargetMinutes = 8 * 60
+            weeklyTargetMinutes = 39 * 60
         )
 
         assertEquals(10 * 60, model.totalMinutes)
@@ -92,8 +89,7 @@ class WeekOverviewModelTest {
             ),
             breakConfig = breakConfig,
             workDaysPerWeek = 5,
-            weeklyTargetMinutes = 39 * 60,
-            dailyTargetMinutes = 8 * 60
+            weeklyTargetMinutes = 39 * 60
         )
 
         assertEquals(6, model.days.size)
@@ -107,8 +103,7 @@ class WeekOverviewModelTest {
             runningDraft = null,
             breakConfig = breakConfig,
             workDaysPerWeek = 6,
-            weeklyTargetMinutes = 39 * 60,
-            dailyTargetMinutes = 6 * 60 + 30
+            weeklyTargetMinutes = 39 * 60
         )
 
         assertEquals(6, model.days.size)
@@ -130,13 +125,12 @@ class WeekOverviewModelTest {
             runningDraft = null,
             breakConfig = breakConfig,
             workDaysPerWeek = 5,
-            weeklyTargetMinutes = 39 * 60,
-            dailyTargetMinutes = 8 * 60
+            weeklyTargetMinutes = 40 * 60
         )
 
         assertEquals(8 * 60, model.totalMinutes)
-        assertEquals(31 * 60, model.targetMinutes)
-        assertEquals(-23 * 60, model.balanceMinutes)
+        assertEquals(32 * 60, model.targetMinutes)
+        assertEquals(-24 * 60, model.balanceMinutes)
         assertEquals(1, model.filledDays)
         assertEquals(1, model.absentWeekdays)
         assertTrue(model.days.single { it.day == DayOfWeek.TUESDAY }.isAbsent)
@@ -152,8 +146,7 @@ class WeekOverviewModelTest {
             runningDraft = null,
             breakConfig = breakConfig,
             workDaysPerWeek = 5,
-            weeklyTargetMinutes = 39 * 60,
-            dailyTargetMinutes = 8 * 60
+            weeklyTargetMinutes = 39 * 60
         )
 
         assertEquals(6, model.days.size)
@@ -177,8 +170,7 @@ class WeekOverviewModelTest {
             ),
             breakConfig = breakConfig,
             workDaysPerWeek = 5,
-            weeklyTargetMinutes = 39 * 60,
-            dailyTargetMinutes = 8 * 60
+            weeklyTargetMinutes = 39 * 60
         )
 
         val tuesday = model.days.single { it.day == DayOfWeek.TUESDAY }
@@ -186,5 +178,39 @@ class WeekOverviewModelTest {
         assertFalse(tuesday.isAbsent)
         assertEquals(39 * 60, model.targetMinutes)
         assertEquals(3 * 60, model.totalMinutes)
+    }
+
+    @Test
+    fun `only absences on configured work days lower the target`() {
+        fun targetWithAbsent(day: DayOfWeek) = buildWeekOverviewModel(
+            entries = mapOf(day to WorkSessionStore.WeekEntry(isAbsent = true)),
+            runningDraft = null,
+            breakConfig = breakConfig,
+            workDaysPerWeek = 4,
+            weeklyTargetMinutes = 32 * 60
+        )
+
+        val friday = targetWithAbsent(DayOfWeek.FRIDAY)
+        assertEquals(32 * 60, friday.targetMinutes)
+        assertEquals(0, friday.absentWeekdays)
+
+        val thursday = targetWithAbsent(DayOfWeek.THURSDAY)
+        assertEquals(24 * 60, thursday.targetMinutes)
+        assertEquals(1, thursday.absentWeekdays)
+    }
+
+    @Test
+    fun `target is rounded up and a fully absent week owes nothing`() {
+        fun targetWithAbsent(days: List<DayOfWeek>) = buildWeekOverviewModel(
+            entries = days.associateWith { WorkSessionStore.WeekEntry(isAbsent = true) },
+            runningDraft = null,
+            breakConfig = breakConfig,
+            workDaysPerWeek = 7,
+            weeklyTargetMinutes = 39 * 60
+        ).targetMinutes
+
+        // 2340 * 6 / 7 = 2005,7 -> 2006
+        assertEquals(2006, targetWithAbsent(listOf(DayOfWeek.MONDAY)))
+        assertEquals(0, targetWithAbsent(DayOfWeek.entries))
     }
 }

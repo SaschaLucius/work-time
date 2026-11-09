@@ -57,14 +57,16 @@ fun SettingsScreen(
         permissionDenied = !granted
         onNotificationsEnabledChange(granted)
     }
-    val maxWeekly = WorkSessionStore.maxWeeklyTargetMinutes(settings.workDaysPerWeek)
-    val canIncreaseWorkDays = settings.workDaysPerWeek < WorkSessionStore.MAX_WORK_DAYS_PER_WEEK &&
-        settings.weeklyTargetMinutes <=
-        WorkSessionStore.maxWeeklyTargetMinutes(settings.workDaysPerWeek + 1) &&
-        WorkSessionStore.dailyTargetMinutes(
-            settings.weeklyTargetMinutes,
-            settings.workDaysPerWeek + 1
-        ) in 1..WorkTimeCalculator.MAX_NET_MINUTES
+    val weekly = settings.weeklyTargetMinutes
+    val workDays = settings.workDaysPerWeek
+    val firstBreak = settings.firstBreakMinutes
+    val secondBreak = settings.secondBreakMinutes
+    val offset = settings.notificationOffsetMinutes
+    val isValidWeekly = { minutes: Int -> WorkSessionStore.isValidWeeklyTarget(minutes, workDays) }
+    val isValidWorkDays = { days: Int -> WorkSessionStore.isValidWeeklyTarget(weekly, days) }
+    val isValidOffset = { minutes: Int ->
+        WorkSessionStore.isValidNotificationOffset(minutes, settings.dailyTargetMinutes)
+    }
 
     Column(
         modifier = Modifier
@@ -81,43 +83,15 @@ fun SettingsScreen(
         SettingsSection(title = "Arbeitszeit") {
             StepperRow(
                 label = "Wochenziel",
-                value = WorkTimeCalculator.formatDuration(settings.weeklyTargetMinutes),
-                canDecrease = settings.weeklyTargetMinutes > WorkSessionStore.MIN_WEEKLY_TARGET_MINUTES &&
-                    WorkSessionStore.dailyTargetMinutes(
-                        settings.weeklyTargetMinutes - 60,
-                        settings.workDaysPerWeek
-                    ) >= 1,
-                canIncrease = settings.weeklyTargetMinutes + 60 <= maxWeekly,
-                onDecrease = {
-                    onWeeklyTargetChange(
-                        (settings.weeklyTargetMinutes - 60)
-                            .coerceAtLeast(WorkSessionStore.MIN_WEEKLY_TARGET_MINUTES)
-                    )
-                },
-                onIncrease = {
-                    onWeeklyTargetChange(
-                        (settings.weeklyTargetMinutes + 60).coerceAtMost(maxWeekly)
-                    )
-                }
+                value = WorkTimeCalculator.formatDuration(weekly),
+                onDecrease = stepIfValid(weekly - 60, isValidWeekly, onWeeklyTargetChange),
+                onIncrease = stepIfValid(weekly + 60, isValidWeekly, onWeeklyTargetChange)
             )
             StepperRow(
                 label = "Wochentage",
-                value = settings.workDaysPerWeek.toString(),
-                canDecrease = settings.workDaysPerWeek > 1 &&
-                    WorkSessionStore.dailyTargetMinutes(
-                        settings.weeklyTargetMinutes,
-                        settings.workDaysPerWeek - 1
-                    ) <= WorkTimeCalculator.MAX_NET_MINUTES,
-                canIncrease = canIncreaseWorkDays,
-                onDecrease = {
-                    onWorkDaysPerWeekChange((settings.workDaysPerWeek - 1).coerceAtLeast(1))
-                },
-                onIncrease = {
-                    onWorkDaysPerWeekChange(
-                        (settings.workDaysPerWeek + 1)
-                            .coerceAtMost(WorkSessionStore.MAX_WORK_DAYS_PER_WEEK)
-                    )
-                }
+                value = workDays.toString(),
+                onDecrease = stepIfValid(workDays - 1, isValidWorkDays, onWorkDaysPerWeekChange),
+                onIncrease = stepIfValid(workDays + 1, isValidWorkDays, onWorkDaysPerWeekChange)
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -143,41 +117,21 @@ fun SettingsScreen(
         HorizontalDivider()
 
         SettingsSection(title = "Pausenabzug") {
+            val isValidFirst = { minutes: Int -> WorkSessionStore.isValidBreaks(minutes, secondBreak) }
+            val isValidSecond = { minutes: Int -> WorkSessionStore.isValidBreaks(firstBreak, minutes) }
+            val changeFirst = { minutes: Int -> onBreakMinutesChange(minutes, secondBreak) }
+            val changeSecond = { minutes: Int -> onBreakMinutesChange(firstBreak, minutes) }
             StepperRow(
                 label = "Nach 6 Stunden",
-                value = "${settings.firstBreakMinutes} Min.",
-                canDecrease = settings.firstBreakMinutes > 0,
-                canIncrease = settings.firstBreakMinutes + 5 <= settings.secondBreakMinutes,
-                onDecrease = {
-                    onBreakMinutesChange(
-                        (settings.firstBreakMinutes - 5).coerceAtLeast(0),
-                        settings.secondBreakMinutes
-                    )
-                },
-                onIncrease = {
-                    onBreakMinutesChange(
-                        settings.firstBreakMinutes + 5,
-                        settings.secondBreakMinutes
-                    )
-                }
+                value = "$firstBreak Min.",
+                onDecrease = stepIfValid(firstBreak - 5, isValidFirst, changeFirst),
+                onIncrease = stepIfValid(firstBreak + 5, isValidFirst, changeFirst)
             )
             StepperRow(
                 label = "Nach 9 Std. 30 Min.",
-                value = "${settings.secondBreakMinutes} Min.",
-                canDecrease = settings.secondBreakMinutes - 5 >= settings.firstBreakMinutes,
-                canIncrease = settings.secondBreakMinutes < 180,
-                onDecrease = {
-                    onBreakMinutesChange(
-                        settings.firstBreakMinutes,
-                        settings.secondBreakMinutes - 5
-                    )
-                },
-                onIncrease = {
-                    onBreakMinutesChange(
-                        settings.firstBreakMinutes,
-                        (settings.secondBreakMinutes + 5).coerceAtMost(180)
-                    )
-                }
+                value = "$secondBreak Min.",
+                onDecrease = stepIfValid(secondBreak - 5, isValidSecond, changeSecond),
+                onIncrease = stepIfValid(secondBreak + 5, isValidSecond, changeSecond)
             )
         }
 
@@ -215,21 +169,9 @@ fun SettingsScreen(
             }
             StepperRow(
                 label = "Tagesziel früher erinnern",
-                value = "${settings.notificationOffsetMinutes} Min.",
-                canDecrease = settings.notificationOffsetMinutes > 0,
-                canIncrease = settings.notificationOffsetMinutes + 5 <=
-                    settings.dailyTargetMinutes,
-                onDecrease = {
-                    onNotificationOffsetChange(
-                        (settings.notificationOffsetMinutes - 5).coerceAtLeast(0)
-                    )
-                },
-                onIncrease = {
-                    onNotificationOffsetChange(
-                        (settings.notificationOffsetMinutes + 5)
-                            .coerceAtMost(settings.dailyTargetMinutes)
-                    )
-                }
+                value = "$offset Min.",
+                onDecrease = stepIfValid(offset - 5, isValidOffset, onNotificationOffsetChange),
+                onIncrease = stepIfValid(offset + 5, isValidOffset, onNotificationOffsetChange)
             )
             if (permissionDenied) {
                 Text(
@@ -270,14 +212,27 @@ private fun SettingsSection(
     }
 }
 
+/**
+ * Schritt nur anbieten, wenn der neue Wert gültig ist. So prüfen Einstellungen und Store
+ * dieselbe Regel, und ein Tipp kann keinen Wert senden, den der Store ablehnt.
+ */
+private fun stepIfValid(
+    next: Int,
+    isValid: (Int) -> Boolean,
+    onChange: (Int) -> Unit
+): (() -> Unit)? = if (isValid(next)) {
+    { onChange(next) }
+} else {
+    null
+}
+
+/** Ein Knopf ist deaktiviert, wenn seine Aktion null ist. */
 @Composable
 private fun StepperRow(
     label: String,
     value: String,
-    canDecrease: Boolean,
-    canIncrease: Boolean,
-    onDecrease: () -> Unit,
-    onIncrease: () -> Unit
+    onDecrease: (() -> Unit)?,
+    onIncrease: (() -> Unit)?
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -288,7 +243,7 @@ private fun StepperRow(
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.weight(1f)
         )
-        IconButton(onClick = onDecrease, enabled = canDecrease) {
+        IconButton(onClick = { onDecrease?.invoke() }, enabled = onDecrease != null) {
             Icon(Icons.Default.Remove, contentDescription = "$label verringern")
         }
         Text(
@@ -296,7 +251,7 @@ private fun StepperRow(
             style = MaterialTheme.typography.titleMedium,
             modifier = Modifier.padding(horizontal = 8.dp)
         )
-        IconButton(onClick = onIncrease, enabled = canIncrease) {
+        IconButton(onClick = { onIncrease?.invoke() }, enabled = onIncrease != null) {
             Icon(Icons.Default.Add, contentDescription = "$label erhöhen")
         }
     }

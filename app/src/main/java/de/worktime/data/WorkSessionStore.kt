@@ -47,11 +47,23 @@ class WorkSessionStore internal constructor(
 
         const val DEFAULT_WEEKLY_TARGET_MINUTES = 39 * 60
         const val DEFAULT_WORK_DAYS_PER_WEEK = 5
-        const val MIN_WEEKLY_TARGET_MINUTES = 15
-        const val MAX_WORK_DAYS_PER_WEEK = 7
+        private const val MIN_WEEKLY_TARGET_MINUTES = 15
+        private const val MAX_WORK_DAYS_PER_WEEK = 7
+        private const val MAX_BREAK_MINUTES = 180
 
-        fun maxWeeklyTargetMinutes(workDaysPerWeek: Int): Int =
-            workDaysPerWeek * WorkTimeCalculator.MAX_NET_MINUTES
+        // Gültigkeitsregeln für Einstellungen: der Store lehnt ungültige Werte ab,
+        // die Einstellungen bieten nur gültige Schritte an. Beide nutzen diese Funktionen.
+        fun isValidBreaks(firstBreakMinutes: Int, secondBreakMinutes: Int): Boolean =
+            firstBreakMinutes in 0..MAX_BREAK_MINUTES &&
+                secondBreakMinutes in firstBreakMinutes..MAX_BREAK_MINUTES
+
+        fun isValidWeeklyTarget(weeklyTargetMinutes: Int, workDaysPerWeek: Int): Boolean =
+            workDaysPerWeek in 1..MAX_WORK_DAYS_PER_WEEK &&
+                weeklyTargetMinutes in
+                MIN_WEEKLY_TARGET_MINUTES..workDaysPerWeek * WorkTimeCalculator.MAX_NET_MINUTES
+
+        fun isValidNotificationOffset(offsetMinutes: Int, dailyTargetMinutes: Int): Boolean =
+            offsetMinutes in 0..dailyTargetMinutes
 
         val WORK_DAYS = DayOfWeek.entries
 
@@ -60,8 +72,6 @@ class WorkSessionStore internal constructor(
 
         fun dailyTargetMinutes(weeklyTargetMinutes: Int, workDaysPerWeek: Int): Int =
             weeklyTargetMinutes / workDaysPerWeek
-
-        fun showWeekends(workDaysPerWeek: Int): Boolean = workDaysPerWeek > 5
 
         fun isConfiguredWorkDay(day: DayOfWeek, workDaysPerWeek: Int): Boolean =
             day.value in 1..workDaysPerWeek
@@ -100,10 +110,6 @@ class WorkSessionStore internal constructor(
         /** Tagesziel = Wochenziel / Wochentage (nicht in den Einstellungen angezeigt). */
         val dailyTargetMinutes: Int
             get() = Companion.dailyTargetMinutes(weeklyTargetMinutes, workDaysPerWeek)
-
-        /** Wochenende anzeigen, sobald 6 oder 7 Arbeitstage konfiguriert sind. */
-        val showWeekends: Boolean
-            get() = Companion.showWeekends(workDaysPerWeek)
     }
 
     data class WeekEntry(
@@ -239,9 +245,8 @@ class WorkSessionStore internal constructor(
     }
 
     suspend fun updateBreakMinutes(firstBreakMinutes: Int, secondBreakMinutes: Int) {
-        require(firstBreakMinutes in 0..180) { "First break must be between 0 and 180 minutes" }
-        require(secondBreakMinutes in firstBreakMinutes..180) {
-            "Second break must be between the first break and 180 minutes"
+        require(isValidBreaks(firstBreakMinutes, secondBreakMinutes)) {
+            "Breaks must be between 0 and $MAX_BREAK_MINUTES minutes, the second at least the first"
         }
         dataStore.edit { prefs ->
             prefs[KEY_FIRST_BREAK_MINUTES] = firstBreakMinutes
@@ -265,9 +270,6 @@ class WorkSessionStore internal constructor(
 
     suspend fun updateWorkDaysPerWeek(days: Int) {
         dataStore.edit { prefs ->
-            require(days in 1..MAX_WORK_DAYS_PER_WEEK) {
-                "Work days per week must be between 1 and $MAX_WORK_DAYS_PER_WEEK"
-            }
             val weekly = prefs[KEY_WEEKLY_TARGET_MINUTES] ?: DEFAULT_WEEKLY_TARGET_MINUTES
             requireValidWeeklyTarget(weekly, days)
             prefs[KEY_WORK_DAYS_PER_WEEK] = days
@@ -280,12 +282,12 @@ class WorkSessionStore internal constructor(
     }
 
     suspend fun updateNotificationOffset(minutes: Int) {
-        require(minutes >= 0) { "Notification offset must not be negative" }
         dataStore.edit { prefs ->
             val weekly = prefs[KEY_WEEKLY_TARGET_MINUTES] ?: DEFAULT_WEEKLY_TARGET_MINUTES
             val workDays = prefs[KEY_WORK_DAYS_PER_WEEK] ?: DEFAULT_WORK_DAYS_PER_WEEK
-            val target = dailyTargetMinutes(weekly, workDays)
-            require(minutes <= target) { "Notification offset must not exceed the daily target" }
+            require(isValidNotificationOffset(minutes, dailyTargetMinutes(weekly, workDays))) {
+                "Notification offset must be between 0 and the daily target"
+            }
             prefs[KEY_NOTIFICATION_OFFSET_MINUTES] = minutes
         }
     }
@@ -422,13 +424,9 @@ class WorkSessionStore internal constructor(
     }
 
     private fun requireValidWeeklyTarget(minutes: Int, workDaysPerWeek: Int) {
-        val maxWeekly = maxWeeklyTargetMinutes(workDaysPerWeek)
-        require(minutes in MIN_WEEKLY_TARGET_MINUTES..maxWeekly) {
-            "Weekly target must be between $MIN_WEEKLY_TARGET_MINUTES and $maxWeekly minutes"
-        }
-        val daily = dailyTargetMinutes(minutes, workDaysPerWeek)
-        require(daily in 1..WorkTimeCalculator.MAX_NET_MINUTES) {
-            "Daily target must be between 1 and ${WorkTimeCalculator.MAX_NET_MINUTES} minutes"
+        require(isValidWeeklyTarget(minutes, workDaysPerWeek)) {
+            "Weekly target must be at least $MIN_WEEKLY_TARGET_MINUTES minutes and at most " +
+                "${WorkTimeCalculator.MAX_NET_MINUTES} per day on 1 to $MAX_WORK_DAYS_PER_WEEK days"
         }
     }
 

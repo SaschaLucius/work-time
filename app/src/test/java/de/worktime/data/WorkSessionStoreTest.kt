@@ -55,10 +55,6 @@ class WorkSessionStoreTest {
             settings
         )
         assertEquals(7 * 60, settings.dailyTargetMinutes)
-        assertFalse(settings.showWeekends)
-
-        store.updateWorkDaysPerWeek(6)
-        assertTrue(store.settings.first().showWeekends)
     }
 
     @Test
@@ -82,6 +78,8 @@ class WorkSessionStoreTest {
         assertIllegalArgument { store.updateWeeklyTarget(0) }
         assertIllegalArgument { store.updateWorkDaysPerWeek(0) }
         assertIllegalArgument { store.updateWorkDaysPerWeek(8) }
+        // 39 Std. auf 3 Tage = 13 Std. pro Tag, über dem gesetzlichen Maximum.
+        assertIllegalArgument { store.updateWorkDaysPerWeek(3) }
         assertIllegalArgument { store.updateNotificationOffset(-1) }
     }
 

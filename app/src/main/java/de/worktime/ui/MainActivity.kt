@@ -203,7 +203,6 @@ private fun ArbeitsApp(openTimerRequests: kotlinx.coroutines.flow.Flow<Unit>) {
                     breakConfig = state.settings.breakConfig,
                     workDaysPerWeek = state.settings.workDaysPerWeek,
                     weeklyTargetMinutes = state.settings.weeklyTargetMinutes,
-                    dailyTargetMinutes = state.settings.dailyTargetMinutes,
                     onStartChange = viewModel::updateWeekStart,
                     onEndChange = viewModel::updateWeekEnd,
                     onDraftStartChange = { minutes ->

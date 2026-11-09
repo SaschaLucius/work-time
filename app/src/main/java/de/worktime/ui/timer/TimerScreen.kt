@@ -181,7 +181,6 @@ fun TimerScreen(viewModel: MainViewModel) {
             )
             val weeklyTargetMinutes = state.weekEntries.adjustedWeeklyTargetMinutes(
                 weeklyTargetMinutes = state.settings.weeklyTargetMinutes,
-                dailyTargetMinutes = state.settings.dailyTargetMinutes,
                 workDaysPerWeek = state.settings.workDaysPerWeek,
                 excluding = if (state.isRunning) currentDay else null
             )
